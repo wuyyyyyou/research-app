@@ -144,11 +144,20 @@ def test_plugin_contract(tmp_path: Path):
 
 
 def test_bundle_contract():
-    app_js = (APP_ROOT / "bundle" / "app.js").read_text(encoding="utf-8")
+    bundle_js = "\n".join(path.read_text(encoding="utf-8") for path in (APP_ROOT / "bundle").glob("assets/*.js"))
+    index = (APP_ROOT / "bundle" / "index.html").read_text(encoding="utf-8")
     manifest = (APP_ROOT / "manifest.json").read_text(encoding="utf-8")
-    assert_true('callResearch("start"' in app_js, "bundle should start")
-    assert_true('callResearch("advance"' in app_js, "bundle should advance")
-    assert_true('callResearch("get_result"' in app_js, "bundle should get result")
+    assert_true('"start"' in bundle_js, "bundle should start")
+    assert_true('"advance"' in bundle_js, "bundle should advance")
+    assert_true('"get_result"' in bundle_js, "bundle should get result")
+    assert_true('"get_status"' in bundle_js, "bundle should keep status action typed")
+    assert_true("query_domains" in bundle_js, "bundle should pass domain filters")
+    assert_true("tool-test-researcher-12345678" in bundle_js, "bundle should invoke required tool")
+    assert_true("/static/anna-apps/_sdk/0.1.0/index.js" in index, "bundle should load Anna SDK")
+    assert_true('type="module"' in index, "bundle should load generated module entry")
+    report_view_source = (APP_ROOT / "src" / "components" / "ReportView.tsx").read_text(encoding="utf-8")
+    assert_true("dangerouslySetInnerHTML" not in report_view_source, "report view should not use raw React HTML injection")
+    assert_true("innerHTML" not in report_view_source, "report view should not use raw DOM HTML injection")
     assert_true("tool-test-researcher-12345678" in manifest, "manifest should reference tool")
 
 
@@ -171,4 +180,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

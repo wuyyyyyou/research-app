@@ -24,7 +24,9 @@
   }
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -33,7 +35,9 @@ body {
   color: var(--text);
 }
 
-button, input, textarea {
+button,
+input,
+textarea {
   font: inherit;
 }
 
@@ -51,13 +55,25 @@ button, input, textarea {
   padding: 8px 0 18px;
 }
 
-h1, h2, h3, p {
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+h1,
+h2,
+h3,
+p {
   margin-top: 0;
 }
 
 .topbar h1 {
   margin-bottom: 4px;
   font-size: 24px;
+  letter-spacing: 0;
 }
 
 .topbar p {
@@ -76,6 +92,27 @@ h1, h2, h3, p {
 .status-pill[data-connected="true"] {
   color: var(--accent-strong);
   border-color: var(--accent);
+}
+
+.language-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.language-toggle button {
+  border: 0;
+  border-radius: 0;
+  padding: 6px 9px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.language-toggle button.active {
+  color: white;
+  background: var(--accent);
 }
 
 .input-band,
@@ -132,7 +169,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-#advance-btn {
+button.secondary {
   color: var(--accent-strong);
   background: transparent;
 }
@@ -181,11 +218,20 @@ button:disabled {
 
 .report h1 {
   font-size: 22px;
+  letter-spacing: 0;
 }
 
 .report h2 {
   margin-top: 20px;
   font-size: 18px;
+  letter-spacing: 0;
+}
+
+.report code {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 4px;
+  background: color-mix(in srgb, var(--line) 35%, transparent);
 }
 
 aside {
@@ -203,6 +249,14 @@ a {
 }
 
 @media (max-width: 760px) {
+  .topbar {
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
   .result-band {
     grid-template-columns: 1fr;
   }
@@ -212,4 +266,3 @@ a {
     padding-left: 0;
   }
 }
-

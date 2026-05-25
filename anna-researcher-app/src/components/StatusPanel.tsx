@@ -1,0 +1,35 @@
+import type { MessageKey } from "../i18n/messages";
+import { localizedJobMessage, localizedSourceCount, localizedStageMessage, localizedStatusLabel } from "../i18n/status";
+import type { ResearchJob } from "../types";
+import { clampProgress } from "../utils/domains";
+
+interface Props {
+  job: ResearchJob | null;
+  message: string;
+  isError: boolean;
+  t(key: MessageKey, params?: Record<string, string | number | undefined>): string;
+}
+
+export function StatusPanel({ job, message, isError, t }: Props) {
+  const status = job ? localizedStatusLabel(job.status, t) : t("idleStageLabel");
+  const stage = job ? localizedStageMessage(job, t) : t("emptyMessage");
+  const fallback = localizedJobMessage(job, t);
+  const displayMessage = message || fallback.message;
+
+  return (
+    <section className="status-band" aria-label={t("statusAria")}>
+      <div className="status-line">
+        <span id="stage-label">
+          {status} · {stage}
+        </span>
+        <span id="source-label">{localizedSourceCount(job?.source_count, t)}</span>
+      </div>
+      <div className="progress" aria-hidden="true">
+        <span style={{ width: `${clampProgress(job?.progress)}%` }} />
+      </div>
+      <p id="message" role="status" data-error={isError ? "true" : "false"}>
+        {displayMessage}
+      </p>
+    </section>
+  );
+}

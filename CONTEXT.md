@@ -104,6 +104,42 @@ _Avoid_: Full job management API, endpoint parity
 The MVP Anna App Shell experience: one page for entering a research query, optionally constraining domains, observing job progress, and reading the markdown report with source URLs. It excludes report-type switching, exports, follow-up chat, history, and multi-job management.
 _Avoid_: Original frontend parity, multi-report dashboard
 
+**Engineered Anna App Shell**:
+An Anna App Shell maintained as structured frontend source and compiled into the static SPA bundle that Anna loads. It preserves the static-bundle runtime contract while avoiding direct long-term editing of generated HTML and script files.
+_Avoid_: Hand-maintained bundle script, server-rendered app shell
+
+**Bilingual App Shell UI**:
+The MVP language scope where the Anna App Shell's controls, labels, status messages, and user-facing errors support Chinese and English. It does not require the Research Result or Anna Research Orchestrator prompts to follow the UI language.
+_Avoid_: Report language policy, backend prompt localization
+
+**App Shell Locale Preference**:
+The frontend-only language preference for Bilingual App Shell UI. It is inferred from the browser language on first load, can be changed by the user in the app shell, and is remembered locally without requiring Anna host storage permissions.
+_Avoid_: Backend language setting, Anna storage-backed preference
+
+**Committed App Shell Bundle**:
+The built static SPA output that Anna loads and that remains committed alongside the Engineered Anna App Shell source. It is not the normal editing surface; source changes should be made in the frontend source and then rebuilt into the committed bundle.
+_Avoid_: Ignored runtime bundle, hand-edited generated bundle
+
+**App Shell Build Workflow**:
+The frontend build workflow for the Engineered Anna App Shell. It builds source-managed UI code into the Committed App Shell Bundle without making Anna runtime startup part of the default agent workflow.
+_Avoid_: Anna runtime dev startup, manual bundle editing
+
+**Typed App Shell Messages**:
+The Bilingual App Shell UI message strategy where Chinese and English text live in local type-checked dictionaries keyed by stable message identifiers. It avoids introducing a full localization framework for the MVP app shell.
+_Avoid_: Remote language packs, backend-owned UI copy
+
+**Localized Status Mapping**:
+The Bilingual App Shell UI behavior where tool statuses, stages, and known error codes are translated in the frontend from stable protocol values. Raw backend messages remain available as fallback details but are not the primary localized copy.
+_Avoid_: Backend-localized UI messages, locale-dependent tool contract
+
+**App Shell Frontend Boundaries**:
+The Engineered Anna App Shell source organization that separates Anna tool API access, research job state, bilingual messages, presentation components, and shared types. It keeps the UI from depending directly on JSON-RPC payload construction.
+_Avoid_: Monolithic app script, component-owned tool protocol
+
+**Safe Report Markdown Rendering**:
+The frontend rendering boundary for Research Result markdown. The app shell renders markdown through a React-safe markdown component and does not build report HTML through string concatenation or raw HTML injection.
+_Avoid_: Hand-written markdown-to-HTML, raw report HTML injection
+
 ## Example Dialogue
 
 Developer: "For the first release, are we building the full Anna-native app?"
@@ -193,3 +229,39 @@ Domain expert: "No. Web Research Sources means web search with optional domain f
 Developer: "Should the first Anna App Shell port the original GPT Researcher frontend feature set?"
 
 Domain expert: "No. Build a Single-Page Research Workbench for the Anna App Adapter MVP."
+
+Developer: "Should the Anna App Shell continue to be maintained as hand-written files inside the runtime bundle?"
+
+Domain expert: "No. Move to an Engineered Anna App Shell while preserving the static SPA bundle output."
+
+Developer: "Should UI bilingual support also force the generated research report language?"
+
+Domain expert: "No. Bilingual App Shell UI covers the frontend surface only; report language policy remains separate."
+
+Developer: "Should the app request Anna storage permissions just to remember the UI language?"
+
+Domain expert: "No. Use App Shell Locale Preference and keep it frontend-only."
+
+Developer: "Should the engineered frontend stop committing the static Anna bundle?"
+
+Domain expert: "No. Keep a Committed App Shell Bundle so the Anna runtime entry remains available."
+
+Developer: "Should normal frontend build scripts start Anna runtime or bridge processes?"
+
+Domain expert: "No. Use an App Shell Build Workflow that builds static assets without starting Anna runtime."
+
+Developer: "Does the MVP need a full i18n framework for two UI languages?"
+
+Domain expert: "No. Use Typed App Shell Messages for the Bilingual App Shell UI."
+
+Developer: "Should the Executa Wrapper return localized error messages for the app shell?"
+
+Domain expert: "No. Use Localized Status Mapping in the frontend and keep the tool contract language-neutral."
+
+Developer: "Should the engineered frontend put tool calls, polling, i18n, and presentation into one component?"
+
+Domain expert: "No. Use App Shell Frontend Boundaries so each concern remains testable."
+
+Developer: "Should the app shell continue rendering LLM-produced report markdown through hand-built HTML strings?"
+
+Domain expert: "No. Use Safe Report Markdown Rendering."

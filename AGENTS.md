@@ -30,6 +30,13 @@ Anna App Shell
 
 第一版只支持 `research_report`。不要把 detailed/deep/resource/outline/multi-agent report 混进 MVP。
 
+当前 Anna App Shell 已改为工程化前端：
+
+- `anna-researcher-app/src/`：Vite + React + TypeScript 源码，是正常编辑入口。
+- `anna-researcher-app/bundle/`：Anna 加载的静态 SPA 构建产物，需要随源码一起提交。
+- 不要手写修改 `bundle/` 中的生成文件；需要改 UI 时改 `src/` 后运行前端 build。
+- UI 支持中文和英文，但这只影响 App Shell 文案，不改变研究报告语言策略。
+
 ## 关键工作约束
 
 - 不要自行启动 `anna-app dev`。
@@ -54,7 +61,8 @@ anna-researcher-app/
 
 ```text
 anna-researcher-app/
-├── bundle/                         # 静态 SPA
+├── src/                            # 工程化 Anna App Shell 源码
+├── bundle/                         # 静态 SPA 构建产物，提交但不要手写修改
 ├── executas/researcher-python/     # Python Executa Wrapper
 │   ├── researcher_plugin.py
 │   └── researcher_adapter/         # 可测试的核心模块
@@ -77,6 +85,20 @@ anna-researcher-app/
 
 ```bash
 python anna-researcher-app/tests/run_tests.py
+```
+
+前端测试：
+
+```bash
+cd anna-researcher-app
+npm run test:frontend
+```
+
+静态 bundle 构建：
+
+```bash
+cd anna-researcher-app
+npm run build
 ```
 
 Python 语法检查：
@@ -157,7 +179,7 @@ ANNA_RESEARCHER_JOBS_ID=jobs-local
 - Python 代码保持简单、可测试、少依赖。
 - 优先使用标准库；引入第三方依赖前先确认必要性。
 - 深模块要有稳定小接口，避免让 UI、JSON-RPC、job store 和业务逻辑互相缠绕。
-- 前端保持静态 SPA，不引入打包链路，除非明确需要。
+- 前端保持 Anna 可加载的静态 SPA 输出；源码使用 Vite + React + TypeScript，构建结果提交到 `bundle/`。
 - 不要用外部 CDN 或远程静态资源。
 - 用户可见错误要清晰，不要吞掉配置错误、sampling 错误或 retrieval 错误。
 
