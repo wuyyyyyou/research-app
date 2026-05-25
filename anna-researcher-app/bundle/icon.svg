@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Anna Researcher">
+  <rect width="64" height="64" rx="14" fill="#101820"/>
+  <path d="M18 18h20a10 10 0 0 1 0 20H26v8h-8V18Z" fill="#f4d35e"/>
+  <path d="M38 38l9 9" stroke="#69d2e7" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="38" cy="28" r="7" fill="#101820" stroke="#69d2e7" stroke-width="4"/>
+</svg>
+

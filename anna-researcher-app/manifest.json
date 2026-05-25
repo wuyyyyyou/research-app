@@ -1,0 +1,63 @@
+{
+  "schema": 2,
+  "permissions": [
+    "tools.invoke",
+    "ui.svg"
+  ],
+  "required_executas": [
+    {
+      "tool_id": "tool-test-researcher-12345678",
+      "min_version": "0.1.0",
+      "version": "latest"
+    }
+  ],
+  "optional_executas": [],
+  "system_prompt_addendum": "The user has Anna Researcher open. Use the Anna Researcher tool as the source of truth for research job status and results.",
+  "user_message_prefix_template": "[Anna Researcher] {user_message}",
+  "tags": ["research", "web", "report", "anna-app"],
+  "ui": {
+    "bundle": {
+      "format": "static-spa",
+      "entry": "index.html",
+      "external_origins": []
+    },
+    "views": [
+      {
+        "name": "main",
+        "title": "Anna Researcher",
+        "default": true,
+        "entry": "index.html",
+        "min_size": { "w": 420, "h": 560 },
+        "default_size": { "w": 760, "h": 720 },
+        "max_size": { "w": 1080, "h": 960 },
+        "resizable": true,
+        "movable": true,
+        "single_instance": true,
+        "icon": "icon.svg"
+      }
+    ],
+    "host_api": {
+      "tools": ["required:tool-test-researcher-12345678"],
+      "chat": [],
+      "artifact": [],
+      "llm": [],
+      "fs": [],
+      "storage": [],
+      "prefs": [],
+      "window": []
+    },
+    "csp_overrides": {
+      "img-src": ["'self'", "data:", "blob:"],
+      "font-src": ["'self'", "data:"],
+      "style-src": ["'self'"],
+      "script-src": ["'self'"]
+    },
+    "state_merge": "last_writer_wins"
+  },
+  "dev": {
+    "fixtures": [],
+    "seed_storage": {},
+    "user_id": 1
+  }
+}
+

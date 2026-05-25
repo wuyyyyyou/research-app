@@ -1,1 +1,47 @@
+# Local reference checkouts / examples
 anna-executa-examples/
+
+# OS / editor files
+**/.DS_Store
+**/.idea/
+**/.vscode/
+
+# Python caches and virtual environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+env/
+
+# Python build outputs
+build/
+dist/
+*.egg-info/
+
+# Node / frontend dependencies and logs
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Anna / Executa local runtime scratch files
+.anna/
+**/.anna/
+executa-resp-*.json
+executa-msg-*.json
+*.tmp

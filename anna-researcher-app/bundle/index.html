@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Anna Researcher</title>
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="workbench">
+      <header class="topbar">
+        <div>
+          <h1>Anna Researcher</h1>
+          <p>Research Report Only</p>
+        </div>
+        <span id="conn-status" class="status-pill">Standalone</span>
+      </header>
+
+      <section class="input-band" aria-label="Research input">
+        <label for="query-input">Research query</label>
+        <textarea id="query-input" rows="4" placeholder="What should Anna research?"></textarea>
+        <details>
+          <summary>Domain filter</summary>
+          <input id="domains-input" type="text" placeholder="example.com, docs.example.com" autocomplete="off" />
+        </details>
+        <div class="actions">
+          <button id="start-btn" type="button">Start Research</button>
+          <button id="advance-btn" type="button" disabled>Advance</button>
+        </div>
+      </section>
+
+      <section class="status-band" aria-label="Research status">
+        <div class="status-line">
+          <span id="stage-label">Idle</span>
+          <span id="source-label">0 sources</span>
+        </div>
+        <div class="progress" aria-hidden="true"><span id="progress-fill"></span></div>
+        <p id="message" role="status">Ready.</p>
+      </section>
+
+      <section class="result-band" aria-label="Research result">
+        <article id="report" class="report empty">The report will appear here.</article>
+        <aside>
+          <h2>Sources</h2>
+          <ul id="sources-list"></ul>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/anna-apps/_sdk/0.1.0/index.js" defer></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>
+
