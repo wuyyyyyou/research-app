@@ -38,7 +38,11 @@ function makeApi(options: { configured?: boolean; invalidPlanning?: boolean } = 
     },
     async saveResearchResult(input) {
       calls.push(["saveResearchResult", input]);
-      return { job: { research_id: input.research_id, status: "completed", stage: "completed", progress: 100, result: { report_markdown: input.report_markdown, source_urls: input.source_urls } }, result: { report_markdown: input.report_markdown, source_urls: input.source_urls } };
+      return { method: "POST", url: "http://127.0.0.1:43123/research-results/" + input.research_id, content_type: "application/json" };
+    },
+    async uploadResearchResult(transfer, input) {
+      calls.push(["uploadResearchResult", transfer, input]);
+      return { job: { research_id: "r1", status: "completed", stage: "completed", progress: 100, result: { report_markdown: input.report_markdown, source_urls: input.source_urls } }, result: { report_markdown: input.report_markdown, source_urls: input.source_urls } };
     },
     async complete(request) {
       llmCalls.push(request);
@@ -83,6 +87,14 @@ describe("useResearchJob", () => {
       "searchWeb",
       { research_id: "r1", search_queries: ["anna", "anna query", "second query"], query_domains: ["example.com"] },
     ]);
+    expect(calls.find((call) => Array.isArray(call) && call[0] === "saveResearchResult")).toEqual(["saveResearchResult", { research_id: "r1" }]);
+    expect(calls.find((call) => Array.isArray(call) && call[0] === "uploadResearchResult")).toEqual([
+      "uploadResearchResult",
+      { method: "POST", url: "http://127.0.0.1:43123/research-results/r1", content_type: "application/json" },
+      { report_markdown: "# Done\n\nUses FULL CONTEXT", source_urls: ["https://example.com"] },
+    ]);
+    expect(JSON.stringify(calls.find((call) => Array.isArray(call) && call[0] === "saveResearchResult"))).not.toContain("report_markdown");
+    expect(JSON.stringify(calls)).not.toContain("selected_sources");
   });
 
   it("falls back to original query when query planning JSON is invalid", async () => {
@@ -100,4 +112,3 @@ describe("useResearchJob", () => {
     ]);
   });
 });
-

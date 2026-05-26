@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -74,18 +76,34 @@ def test_search_context_result(tmp_path: Path):
     assert_true(len(search["source_urls"]) == len(set(search["source_urls"])), "search urls should dedupe")
     selected = dispatcher.dispatch("app_select_context", {"research_id": research_id})
     assert_true(bool(selected["selected_context"]), "context should be selected")
-    saved = dispatcher.dispatch(
-        "app_save_research_result",
-        {
-            "research_id": research_id,
-            "report_markdown": "# Research Report\n\nDone",
-            "source_urls": selected["source_urls"],
-            "selected_sources": selected["selected_sources"],
-        },
-    )
+    transfer = dispatcher.dispatch("app_save_research_result", {"research_id": research_id})["transfer"]
+    assert_true(transfer["method"] == "POST", "save should return transfer descriptor")
+    saved = post_json(transfer["url"], {"report_markdown": "# Research Report\n\nDone", "source_urls": selected["source_urls"]})
     assert_true(saved["result"]["report_markdown"].startswith("# Research Report"), "result should persist")
+    assert_true("sources" not in saved["result"], "http result should be compact")
     loaded = dispatcher.dispatch("app_get_research_job", {"research_id": research_id})["job"]
     assert_true(loaded["result"]["report_markdown"].startswith("# Research Report"), "loaded job should include result")
+    assert_true("search_results" not in loaded, "loaded job should be compact")
+    assert_true("selected_context" not in loaded, "loaded job should not include selected context")
+    assert_true("selected_sources" not in loaded, "loaded job should not include selected sources")
+
+
+def test_result_transfer_http(tmp_path: Path):
+    dispatcher = make_dispatcher(tmp_path)
+    job = dispatcher.dispatch("app_create_research_job", {"query": "anna"})["job"]
+    first = dispatcher.dispatch("app_save_research_result", {"research_id": job["research_id"]})["transfer"]
+    second = dispatcher.dispatch("app_save_research_result", {"research_id": job["research_id"]})["transfer"]
+    assert_true(first["url"] == second["url"], "transfer server should be singleton")
+    options = urllib.request.Request(first["url"], method="OPTIONS")
+    with urllib.request.urlopen(options, timeout=5) as response:
+        assert_true(response.status == 204, "preflight should succeed")
+        assert_true(response.headers["Access-Control-Allow-Origin"] == "*", "cors should allow any origin")
+        assert_true(response.headers["Access-Control-Allow-Private-Network"] == "true", "private network preflight should be allowed")
+    try:
+        post_json(first["url"], {"report_markdown": " "})
+        raise AssertionError("blank report should fail")
+    except urllib.error.HTTPError as exc:
+        assert_true(exc.code == 400, "blank report should return 400")
 
 
 def test_search_requires_settings(tmp_path: Path):
@@ -176,6 +194,13 @@ def test_plugin_contract(tmp_path: Path):
         plugin.close()
 
 
+def post_json(url: str, payload: dict):
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def test_bundle_contract():
     bundle_js = "\n".join(path.read_text(encoding="utf-8") for path in (APP_ROOT / "bundle").glob("assets/*.js"))
     manifest = (APP_ROOT / "manifest.json").read_text(encoding="utf-8")
@@ -191,6 +216,7 @@ def main():
         ("settings", test_settings),
         ("job_shell", test_job_shell),
         ("search_context_result", test_search_context_result),
+        ("result_transfer_http", test_result_transfer_http),
         ("search_requires_settings", test_search_requires_settings),
         ("selector", lambda tmp: test_selector()),
         ("plugin_contract", test_plugin_contract),

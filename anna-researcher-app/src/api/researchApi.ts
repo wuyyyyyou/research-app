@@ -1,4 +1,4 @@
-import { TOOL_ID, type AnnaRuntimeApi, type ResearchJob, type ResearchResult, type SearchResult, type StartResearchInput, type ToolSettings } from "../types";
+import { TOOL_ID, type AnnaRuntimeApi, type ResearchJob, type ResearchResult, type ResultTransferDescriptor, type SearchResult, type StartResearchInput, type ToolSettings } from "../types";
 
 interface SettingsResponse {
   settings?: ToolSettings;
@@ -24,6 +24,10 @@ interface ResultResponse extends JobResponse {
   result?: ResearchResult;
 }
 
+interface TransferResponse {
+  transfer?: ResultTransferDescriptor;
+}
+
 export interface ResearchApi {
   getSettings(): Promise<ToolSettings>;
   updateSettings(input: { tavily_api_key?: string; clear_tavily_api_key?: boolean }): Promise<ToolSettings>;
@@ -32,7 +36,8 @@ export interface ResearchApi {
   getResearchJob(researchId?: string): Promise<ResearchJob | null>;
   searchWeb(input: { research_id: string; search_queries: string[]; query_domains?: string[] }): Promise<SearchResponse>;
   selectContext(input: { research_id: string }): Promise<ContextResponse>;
-  saveResearchResult(input: { research_id: string; report_markdown: string; source_urls?: string[]; selected_sources?: SearchResult[] }): Promise<ResultResponse>;
+  saveResearchResult(input: { research_id: string }): Promise<ResultTransferDescriptor>;
+  uploadResearchResult(transfer: ResultTransferDescriptor, input: { report_markdown: string; source_urls?: string[] }): Promise<ResultResponse>;
   complete(messages: AnnaRuntimeApi["llm"]["complete"] extends (request: infer Req) => unknown ? Req : never): ReturnType<AnnaRuntimeApi["llm"]["complete"]>;
 }
 
@@ -72,8 +77,24 @@ export class AnnaResearchApi implements ResearchApi {
     return (await this.call("app_select_context", input)) as ContextResponse;
   }
 
-  async saveResearchResult(input: { research_id: string; report_markdown: string; source_urls?: string[]; selected_sources?: SearchResult[] }): Promise<ResultResponse> {
-    return (await this.call("app_save_research_result", input)) as ResultResponse;
+  async saveResearchResult(input: { research_id: string }): Promise<ResultTransferDescriptor> {
+    const response = (await this.call("app_save_research_result", input)) as TransferResponse;
+    if (!response.transfer?.url) throw new Error("Save response did not include a result transfer URL.");
+    return response.transfer;
+  }
+
+  async uploadResearchResult(transfer: ResultTransferDescriptor, input: { report_markdown: string; source_urls?: string[] }): Promise<ResultResponse> {
+    const response = await fetch(transfer.url, {
+      method: transfer.method || "POST",
+      headers: { "Content-Type": transfer.content_type || "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = data?.message || data?.error || `Research result transfer failed with HTTP ${response.status}.`;
+      throw new Error(message);
+    }
+    return data as ResultResponse;
   }
 
   complete(request: Parameters<AnnaRuntimeApi["llm"]["complete"]>[0]) {
@@ -105,6 +126,7 @@ export function createStandaloneApi(): ResearchApi {
     searchWeb: fail,
     selectContext: fail,
     saveResearchResult: fail,
+    uploadResearchResult: fail,
     complete: fail as ResearchApi["complete"],
   };
 }
@@ -114,4 +136,3 @@ function requireJob(response: unknown): ResearchJob {
   if (!job) throw new Error("Research response did not include a job.");
   return job;
 }
-

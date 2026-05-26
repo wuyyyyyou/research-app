@@ -59,6 +59,12 @@ export interface ResearchResult {
   updated_at?: string;
 }
 
+export interface ResultTransferDescriptor {
+  method: "POST" | string;
+  url: string;
+  content_type?: string;
+}
+
 export interface StartResearchInput {
   query: string;
   query_domains: string[];
@@ -113,4 +119,3 @@ export interface AnnaRuntimeGlobal {
 export type ConnectionState = "connected" | "standalone";
 
 export type ResearchPhase = "idle" | "settings_required" | "starting" | "running" | "loading_result" | "completed" | "failed";
-

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import urllib.request
 
 from conftest import TOOL_DIR, isolated_env
 
@@ -78,8 +79,18 @@ def test_settings_job_search_context_result_lifecycle(tmp_path):
         selected = plugin.call("invoke", {"tool": "app_select_context", "arguments": {"research_id": research_id}})
         assert selected["result"]["data"]["selected_context"]
 
-        saved = plugin.call("invoke", {"tool": "app_save_research_result", "arguments": {"research_id": research_id, "report_markdown": "# Research Report"}})
-        assert saved["result"]["data"]["result"]["report_markdown"] == "# Research Report"
+        transfer_response = plugin.call("invoke", {"tool": "app_save_research_result", "arguments": {"research_id": research_id}})
+        transfer = transfer_response["result"]["data"]["transfer"]
+        assert transfer["method"] == "POST"
+        assert "report_markdown" not in json.dumps(transfer)
+        saved = post_json(transfer["url"], {"report_markdown": "# Research Report"})
+        assert saved["result"]["report_markdown"] == "# Research Report"
     finally:
         plugin.close()
 
+
+def post_json(url: str, payload: dict):
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))

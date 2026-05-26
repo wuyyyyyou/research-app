@@ -96,11 +96,10 @@ export function useResearchJob(api: ResearchApi) {
         setJob({ ...current, stage: "write_report", progress: 90 });
 
         const report = await writeReport(api, query, role.agent_role_prompt, selected.selected_context || current.selected_context || "");
-        const saved = await api.saveResearchResult({
-          research_id: requiredResearchId(current),
+        const transfer = await api.saveResearchResult({ research_id: requiredResearchId(current) });
+        const saved = await api.uploadResearchResult(transfer, {
           report_markdown: report,
           source_urls: selected.source_urls || current.source_urls || [],
-          selected_sources: selected.selected_sources || current.selected_sources || [],
         });
         current = saved.job ?? current;
         setJob(current);
@@ -216,4 +215,3 @@ function normalizeQueries(original: string, planned: unknown[], limit = 3): stri
   }
   return queries.length ? queries : [original];
 }
-

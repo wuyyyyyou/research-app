@@ -1,0 +1,7 @@
+# Temporary Local Result Transfer Server For Large Research Results
+
+The Anna Researcher app temporarily saves completed Research Results through a local HTTP transfer server owned by the Researcher Tool Backend because the Executa stdio protocol can terminate when large payloads flow through `anna.tools.invoke`. `app_save_research_result` remains the control-plane App Tool Method, but it returns a local `POST http://127.0.0.1:<port>/research-results/<research_id>` transfer descriptor; the Anna App Shell sends only the completed report markdown and source URLs through that HTTP endpoint, and the backend continues persisting the existing `<research_id>.json` job record.
+
+**Consequences**
+
+The Local Result Transfer Server is a workaround, not a public backend API. It binds only to `127.0.0.1`, uses a singleton server for the tool process lifetime, accepts only fixed result-save fields for an existing research job, returns only a compact status/result response, and does not replace the Executa Local Job Store. It intentionally does not use tokens for this temporary path; browser access is allowed with permissive CORS and private-network preflight headers so Anna environments whose origins are not `localhost:5180` can still post to the local service. When Anna's stdio large-payload behavior is fixed, this HTTP transfer path should be removed and result persistence can return to the normal App Tool Method boundary.

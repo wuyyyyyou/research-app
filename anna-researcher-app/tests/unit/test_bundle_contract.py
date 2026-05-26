@@ -22,3 +22,7 @@ def test_bundle_does_not_contain_legacy_research_action_contract():
     assert '"action":"advance"' not in bundle_js
     assert "app_create_research_job" in bundle_js
     assert "app_save_research_result" in bundle_js
+    assert "uploadResearchResult" in bundle_js
+    assert "saveResearchResult({research_id:" in bundle_js
+    assert "uploadResearchResult(mt,{report_markdown:" in bundle_js
+    assert "selected_sources" not in bundle_js

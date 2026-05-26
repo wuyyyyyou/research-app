@@ -22,7 +22,7 @@ describe("AnnaResearchApi", () => {
             return { success: true, data: { selected_context: "context", selected_sources: [], source_urls: [] } };
           }
           if (request.method === "app_save_research_result") {
-            return { success: true, data: { result: { report_markdown: "# Report" } } };
+            return { success: true, data: { transfer: { method: "POST", url: "http://127.0.0.1:43123/research-results/r1", content_type: "application/json" } } };
           }
           return { success: true, data: { job: { research_id: "r1", status: "running" } } };
         },
@@ -35,6 +35,13 @@ describe("AnnaResearchApi", () => {
     };
 
     const api = new AnnaResearchApi(anna);
+    const oldFetch = globalThis.fetch;
+    const fetchCalls: unknown[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push([url, init]);
+      return new Response(JSON.stringify({ result: { report_markdown: "# Report", source_urls: ["https://example.com"] } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
     await api.getSettings();
     await api.updateSettings({ tavily_api_key: "tvly-test" });
     await api.createResearchJob({ query: "anna", query_domains: ["example.com"] });
@@ -42,7 +49,8 @@ describe("AnnaResearchApi", () => {
     await api.getResearchJob("r1");
     await api.searchWeb({ research_id: "r1", search_queries: ["anna"] });
     await api.selectContext({ research_id: "r1" });
-    await api.saveResearchResult({ research_id: "r1", report_markdown: "# Report" });
+    const transfer = await api.saveResearchResult({ research_id: "r1" });
+    await api.uploadResearchResult(transfer, { report_markdown: "# Report", source_urls: ["https://example.com"] });
 
     expect(calls).toEqual([
       { tool_id: TOOL_ID, method: "app_get_settings", args: {} },
@@ -52,8 +60,13 @@ describe("AnnaResearchApi", () => {
       { tool_id: TOOL_ID, method: "app_get_research_job", args: { research_id: "r1" } },
       { tool_id: TOOL_ID, method: "app_search_web", args: { research_id: "r1", search_queries: ["anna"] } },
       { tool_id: TOOL_ID, method: "app_select_context", args: { research_id: "r1" } },
-      { tool_id: TOOL_ID, method: "app_save_research_result", args: { research_id: "r1", report_markdown: "# Report" } },
+      { tool_id: TOOL_ID, method: "app_save_research_result", args: { research_id: "r1" } },
     ]);
+    expect(fetchCalls).toHaveLength(1);
+    expect(JSON.stringify(fetchCalls[0])).toContain("# Report");
+    expect(JSON.stringify(fetchCalls[0])).not.toContain("selected_sources");
+    } finally {
+      globalThis.fetch = oldFetch;
+    }
   });
 });
-
