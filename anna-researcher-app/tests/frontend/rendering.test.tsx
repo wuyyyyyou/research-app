@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { formatResearchQuery, hasCompletedResearchResult, makeIntroStepLabel, makeStepLabel } from "../../src/App";
 import { ReportView } from "../../src/components/ReportView";
 import { ResearchForm } from "../../src/components/ResearchForm";
 import { ResearchSourcePanel } from "../../src/components/ResearchSourcePanel";
@@ -35,18 +36,104 @@ describe("locale preference UI behavior", () => {
 });
 
 describe("ResearchForm", () => {
-  it("validates query input and forwards the trimmed query", () => {
+  it("validates research need input and forwards the trimmed fields", () => {
     const t = createTranslator("en");
     const onStart = vi.fn();
     const onValidationError = vi.fn();
-    render(<ResearchForm isBusy={false} canStart={true} t={t} onStart={onStart} onValidationError={onValidationError} />);
+    render(
+      <ResearchForm
+        isBusy={false}
+        canStart={true}
+        t={t}
+        stepLabel="Step 1/5"
+        validationMessage=""
+        canShowLastResult={false}
+        onShowLastResult={vi.fn()}
+        onStart={onStart}
+        onValidationError={onValidationError}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Start Research" }));
-    expect(onValidationError).toHaveBeenCalledWith("Enter a research query.");
+    expect(onValidationError).toHaveBeenCalledWith("Enter a research need.");
 
-    fireEvent.change(screen.getByLabelText("Research query"), { target: { value: "  Anna App  " } });
+    fireEvent.change(screen.getByLabelText("Brief Name"), { target: { value: "  Anna App  " } });
+    fireEvent.change(screen.getByLabelText("Research Need"), { target: { value: "  Prepare a customer brief.  " } });
     fireEvent.click(screen.getByRole("button", { name: "Start Research" }));
-    expect(onStart).toHaveBeenCalledWith("Anna App");
+    expect(onStart).toHaveBeenCalledWith({ briefName: "Anna App", researchNeed: "Prepare a customer brief." });
+    expect(screen.getByText("Research uses configured sources and user-provided context.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "View Last Result" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("enables the last-result action only when a completed result is available", () => {
+    const t = createTranslator("en");
+    const onShowLastResult = vi.fn();
+    render(
+      <ResearchForm
+        isBusy={false}
+        canStart={true}
+        t={t}
+        stepLabel="Step 1/5"
+        validationMessage=""
+        canShowLastResult={true}
+        onShowLastResult={onShowLastResult}
+        onStart={vi.fn()}
+        onValidationError={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View Last Result" }));
+    expect(onShowLastResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps start disabled and shows the source configuration hint when no source is ready", () => {
+    const t = createTranslator("en");
+    render(
+      <ResearchForm
+        isBusy={false}
+        canStart={false}
+        t={t}
+        stepLabel="Step 1/5"
+        validationMessage="Enter a research need."
+        canShowLastResult={false}
+        onShowLastResult={vi.fn()}
+        onStart={vi.fn()}
+        onValidationError={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Start Research" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Configure at least one research source credential to begin.")).toBeTruthy();
+    expect(screen.getByText("Enter a research need.")).toBeTruthy();
+  });
+});
+
+describe("research query composition", () => {
+  it("combines optional brief name with required research need per locale", () => {
+    expect(formatResearchQuery({ briefName: "Sweetgreen", researchNeed: "Prepare the call." }, "en")).toBe(
+      "Research topic: Sweetgreen\n\nResearch need:\nPrepare the call.",
+    );
+    expect(formatResearchQuery({ briefName: "", researchNeed: "准备会议。" }, "zh-CN")).toBe(
+      "研究主题：未提供\n\n研究具体内容：\n准备会议。",
+    );
+  });
+
+  it("derives the visible step label from job progress", () => {
+    expect(makeStepLabel({ phase: "idle" })).toBe("Step 1/5");
+    expect(makeStepLabel({ phase: "running", iteration: 2, maxIterations: 5 })).toBe("Step 2/5");
+    expect(makeStepLabel({ phase: "completed", iteration: 3, maxIterations: 5 })).toBe("Step 5/5");
+    expect(makeStepLabel({ phase: "failed", iteration: 3, maxIterations: 5 })).toBe("Step 3/5");
+  });
+
+  it("keeps the intro step label at the first step even when latest research is completed", () => {
+    expect(makeIntroStepLabel(5)).toBe("Step 1/5");
+  });
+
+  it("only enables last-result access for completed research results", () => {
+    expect(hasCompletedResearchResult({ status: "completed", result: { report_markdown: "# Done" } }, null)).toBe(true);
+    expect(hasCompletedResearchResult({ status: "completed" }, { report_markdown: "# Done" })).toBe(true);
+    expect(hasCompletedResearchResult({ status: "running", result: { report_markdown: "# Draft" } }, null)).toBe(false);
+    expect(hasCompletedResearchResult({ status: "completed", result: null }, null)).toBe(false);
   });
 });
 

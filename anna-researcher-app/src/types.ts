@@ -183,6 +183,4 @@ export interface AnnaRuntimeGlobal {
   connect(): Promise<AnnaRuntimeApi>;
 }
 
-export type ConnectionState = "connected" | "standalone";
-
 export type ResearchPhase = "idle" | "settings_required" | "starting" | "running" | "loading_result" | "completed" | "failed";

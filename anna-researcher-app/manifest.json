@@ -28,7 +28,7 @@
         "default": true,
         "entry": "index.html",
         "min_size": { "w": 420, "h": 560 },
-        "default_size": { "w": 760, "h": 720 },
+        "default_size": { "w": 1040, "h": 760 },
         "max_size": { "w": 1080, "h": 960 },
         "resizable": true,
         "movable": true,
