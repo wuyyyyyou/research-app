@@ -24,7 +24,7 @@ describe("AnnaResearchApi", () => {
                     enabled: true,
                     max_parallel: 3,
                     credential_status: "configured",
-                    credential_masked: "***test",
+                    credential: "tvly-test",
                   },
                 ],
               },
@@ -41,7 +41,7 @@ describe("AnnaResearchApi", () => {
                   enabled: true,
                   max_parallel: 3,
                   credential_status: "configured",
-                  credential_masked: "***test",
+                  credential: "tvly-test",
                 },
               },
             };
@@ -63,6 +63,22 @@ describe("AnnaResearchApi", () => {
                   duration_ms: 4,
                   error: null,
                   calls: [],
+                },
+              },
+            };
+          }
+          if (request.method === "app_test_research_source") {
+            return {
+              success: true,
+              data: {
+                test: {
+                  source_id: "tavily",
+                  source_name: "Tavily",
+                  query: "anna",
+                  duration_ms: 1,
+                  pages: [],
+                  extracted: [],
+                  error: null,
                 },
               },
             };
@@ -104,6 +120,7 @@ describe("AnnaResearchApi", () => {
       await api.createResearchJob({ query: "anna" });
       await api.updateResearchJob("r1", { stage: "plan_queries" });
       await api.getResearchJob("r1");
+      await api.testResearchSource({ id: "tavily", definition: { id: "tavily" }, query: "anna" });
       await api.callResearchSource({ research_id: "r1", iteration: 1, source_id: "tavily", queries: ["anna"] });
       await api.selectContext({ research_id: "r1" });
       const transfer = await api.saveResearchResult({ research_id: "r1" });
@@ -117,6 +134,7 @@ describe("AnnaResearchApi", () => {
         { tool_id: TOOL_ID, method: "app_create_research_job", args: { query: "anna" } },
         { tool_id: TOOL_ID, method: "app_update_research_job", args: { research_id: "r1", updates: { stage: "plan_queries" } } },
         { tool_id: TOOL_ID, method: "app_get_research_job", args: { research_id: "r1" } },
+        { tool_id: TOOL_ID, method: "app_test_research_source", args: { id: "tavily", definition: { id: "tavily" }, query: "anna" } },
         {
           tool_id: TOOL_ID,
           method: "app_call_research_source",

@@ -23,6 +23,7 @@ APP_METHODS = [
     "app_set_research_source_enabled",
     "app_upsert_research_source",
     "app_delete_research_source",
+    "app_test_research_source",
     "app_call_research_source",
     "app_select_context",
     "app_save_research_result",
@@ -129,4 +130,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

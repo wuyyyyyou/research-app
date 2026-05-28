@@ -7,7 +7,7 @@ from .envelope import (
     EnvelopeError,
     validate_envelope,
 )
-from .executor import ResearchSourceExecutor, SourceCallError, SourceCallResult
+from .executor import ResearchSourceExecutor, SourceCallError, SourceCallResult, SourceTestResult
 from .registry import (
     BUILTIN_SOURCE_IDS,
     ResearchSourceRegistry,
@@ -24,6 +24,7 @@ __all__ = [
     "ResearchSourceRegistry",
     "SourceCallError",
     "SourceCallResult",
+    "SourceTestResult",
     "builtin_tavily_definition",
     "mask_secret",
     "migrate_legacy_tavily_key",

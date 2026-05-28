@@ -22,6 +22,8 @@ _OAUTH_HINTS = ("oauth", "client_secret", "refresh_token", "id_token", "access_t
 _HMAC_HINTS = ("hmac", "signature", "signing_key", "signed_request", "x-signature")
 _DISALLOWED_CONTENT_HINTS = ("multipart", "octet-stream", "event-stream", "stream", "ndjson")
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+_RESULT_TEMPLATE_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+_RESULT_CONTEXT_PLACEHOLDERS = frozenset({"query", "page", "page_size", "cursor"})
 
 
 class EnvelopeError(ValidationError):
@@ -95,19 +97,7 @@ def validate_envelope(definition: dict[str, Any], *, kind: str = "user") -> None
     if max_pages > MAX_PAGES:
         raise EnvelopeError("max_pages_exceeds_cap", detail=str(max_pages))
 
-    field_map = definition.get("field_map")
-    if not isinstance(field_map, dict):
-        raise EnvelopeError("field_map_required")
-    for key in ("items_path", "url", "title"):
-        value = field_map.get(key)
-        if not isinstance(value, str) or not value.strip():
-            raise EnvelopeError(f"field_map_missing_{key}")
-    content_paths = field_map.get("content")
-    if not isinstance(content_paths, list) or not content_paths:
-        raise EnvelopeError("field_map_content_must_be_nonempty_array")
-    for entry in content_paths:
-        if not isinstance(entry, str) or not entry.strip():
-            raise EnvelopeError("field_map_content_path_invalid")
+    _validate_result(definition.get("result"))
 
     response = definition.get("response")
     if response is not None:
@@ -175,3 +165,86 @@ def _reject_script_fields(definition: dict[str, Any]) -> None:
     for forbidden in ("script", "pre_request", "transform", "javascript", "lua", "eval"):
         if forbidden in definition:
             raise EnvelopeError("script_fields_not_supported", detail=forbidden)
+
+
+def _validate_result(result: Any) -> None:
+    if not isinstance(result, dict):
+        raise EnvelopeError("result_required")
+    items_path = result.get("items_path")
+    if not isinstance(items_path, str) or not items_path.strip():
+        raise EnvelopeError("result_items_path_required")
+    _validate_url_spec(result.get("url"))
+    _validate_path_or_template_spec(result.get("title"), name="title")
+    _validate_content_spec(result.get("content"))
+    next_cursor = result.get("next_cursor")
+    if next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor.strip()):
+        raise EnvelopeError("result_next_cursor_invalid")
+
+
+def _validate_url_spec(spec: Any) -> None:
+    if not isinstance(spec, dict):
+        raise EnvelopeError("result_url_required")
+    mode = str(spec.get("mode") or "")
+    if mode == "none":
+        return
+    if mode not in {"path", "template"}:
+        raise EnvelopeError("result_url_mode_invalid", detail=mode or "<missing>")
+    _require_string_value(spec, reason="result_url_value_required")
+    if mode == "template":
+        _validate_result_template(str(spec.get("value") or ""))
+
+
+def _validate_path_or_template_spec(spec: Any, *, name: str) -> None:
+    if not isinstance(spec, dict):
+        raise EnvelopeError(f"result_{name}_required")
+    mode = str(spec.get("mode") or "")
+    if mode not in {"path", "template"}:
+        raise EnvelopeError(f"result_{name}_mode_invalid", detail=mode or "<missing>")
+    _require_string_value(spec, reason=f"result_{name}_value_required")
+    if mode == "template":
+        _validate_result_template(str(spec.get("value") or ""))
+
+
+def _validate_content_spec(spec: Any) -> None:
+    if not isinstance(spec, dict):
+        raise EnvelopeError("result_content_required")
+    mode = str(spec.get("mode") or "")
+    if mode == "paths":
+        value = spec.get("value")
+        if not isinstance(value, list) or not value:
+            raise EnvelopeError("result_content_paths_must_be_nonempty_array")
+        for entry in value:
+            if not isinstance(entry, str) or not entry.strip():
+                raise EnvelopeError("result_content_path_invalid")
+        return
+    if mode == "template":
+        _require_string_value(spec, reason="result_content_value_required")
+        _validate_result_template(str(spec.get("value") or ""))
+        return
+    raise EnvelopeError("result_content_mode_invalid", detail=mode or "<missing>")
+
+
+def _require_string_value(spec: dict[str, Any], *, reason: str) -> None:
+    value = spec.get("value")
+    if not isinstance(value, str) or not value.strip():
+        raise EnvelopeError(reason)
+
+
+def _validate_result_template(template: str) -> None:
+    for raw in _RESULT_TEMPLATE_RE.findall(template or ""):
+        name = raw.strip()
+        if not name:
+            raise EnvelopeError("result_template_placeholder_invalid")
+        if name == "token" or name.startswith("token.") or name == "context.token" or name.startswith("context.token."):
+            raise EnvelopeError("result_template_token_not_allowed")
+        if name.startswith("item."):
+            path = name[5:]
+            if not path:
+                raise EnvelopeError("result_template_placeholder_invalid", detail=name)
+            continue
+        if name.startswith("context."):
+            key = name[8:]
+            if key not in _RESULT_CONTEXT_PLACEHOLDERS:
+                raise EnvelopeError("result_template_context_unknown", detail=key)
+            continue
+        raise EnvelopeError("result_template_placeholder_invalid", detail=name)

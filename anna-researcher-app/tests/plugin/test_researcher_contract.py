@@ -60,6 +60,7 @@ def test_describe_v2_app_methods_only(tmp_path):
         assert "app_search_web" not in tools
         assert "app_call_research_source" in tools
         assert "app_list_research_sources" in tools
+        assert "app_test_research_source" in tools
         assert "app_update_research_source_credential" in tools
         assert all(name.startswith("app_") for name in tools)
         health = plugin.call("health")
@@ -83,7 +84,7 @@ def test_app_call_research_source_lifecycle(tmp_path):
         )
         view = saved["result"]["data"]["source"]
         assert view["credential_status"] == "configured"
-        assert view["credential_masked"].startswith("***")
+        assert view["credential"] == "tvly-test-secret"
 
         created = plugin.call("invoke", {"tool": "app_create_research_job", "arguments": {"query": "anna app adapter"}})
         research_id = created["result"]["data"]["job"]["research_id"]

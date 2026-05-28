@@ -4,6 +4,7 @@ import {
   type IterationEntry,
   type ResearchJob,
   type ResearchResult,
+  type ResearchSourceTestResult,
   type ResearchSourceView,
   type ResultTransferDescriptor,
   type SearchResult,
@@ -26,6 +27,10 @@ interface SourceListResponse {
 
 interface SourceResponse {
   source?: ResearchSourceView;
+}
+
+interface SourceTestResponse {
+  test?: ResearchSourceTestResult;
 }
 
 interface CallSourceResponse extends JobResponse {
@@ -54,6 +59,7 @@ export interface ResearchApi {
   setResearchSourceEnabled(input: { id: string; enabled: boolean }): Promise<ResearchSourceView>;
   upsertResearchSource(input: { definition: Record<string, unknown>; credential?: string }): Promise<ResearchSourceView>;
   deleteResearchSource(input: { id: string }): Promise<{ id: string; deleted: boolean }>;
+  testResearchSource(input: { id: string; definition: Record<string, unknown>; query: string }): Promise<ResearchSourceTestResult>;
   createResearchJob(input: StartResearchInput): Promise<ResearchJob>;
   updateResearchJob(researchId: string, updates: Record<string, unknown>): Promise<ResearchJob>;
   getResearchJob(researchId?: string): Promise<ResearchJob | null>;
@@ -119,6 +125,12 @@ export class AnnaResearchApi implements ResearchApi {
   async deleteResearchSource(input: { id: string }): Promise<{ id: string; deleted: boolean }> {
     const response = (await this.call("app_delete_research_source", input)) as { id?: string; deleted?: boolean };
     return { id: response.id ?? input.id, deleted: Boolean(response.deleted) };
+  }
+
+  async testResearchSource(input: { id: string; definition: Record<string, unknown>; query: string }): Promise<ResearchSourceTestResult> {
+    const response = (await this.call("app_test_research_source", input)) as SourceTestResponse;
+    if (!response.test) throw new Error("Source test did not return a test result.");
+    return response.test;
   }
 
   async createResearchJob(input: StartResearchInput): Promise<ResearchJob> {
@@ -199,6 +211,7 @@ export function createStandaloneApi(): ResearchApi {
     setResearchSourceEnabled: fail,
     upsertResearchSource: fail,
     deleteResearchSource: fail,
+    testResearchSource: fail,
     createResearchJob: fail,
     updateResearchJob: fail,
     getResearchJob: fail,

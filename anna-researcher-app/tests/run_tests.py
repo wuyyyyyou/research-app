@@ -196,6 +196,7 @@ def test_plugin_contract(tmp_path: Path):
         assert_true("app_search_web" not in tools, "legacy app_search_web must be removed")
         assert_true("app_call_research_source" in tools, "new app_call_research_source must be advertised")
         assert_true("app_list_research_sources" in tools, "new app_list_research_sources must be advertised")
+        assert_true("app_test_research_source" in tools, "source test method must be advertised")
         assert_true(all(name.startswith("app_") for name in tools), "all methods should be app methods")
         health = plugin.call("health")
         assert_true(health["result"]["status"] == "healthy", "health should pass")

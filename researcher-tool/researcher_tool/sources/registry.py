@@ -35,11 +35,11 @@ def builtin_tavily_definition() -> dict[str, Any]:
             },
         },
         "pagination": {"mode": "none", "max_pages": 1, "page_size": 5, "start_page": 1},
-        "field_map": {
+        "result": {
             "items_path": "results[]",
-            "url": "url",
-            "title": "title",
-            "content": ["content"],
+            "url": {"mode": "path", "value": "url"},
+            "title": {"mode": "path", "value": "title"},
+            "content": {"mode": "paths", "value": ["content"]},
         },
         "response": {"content_type": "application/json"},
     }
@@ -207,10 +207,9 @@ class ResearchSourceRegistry:
             "max_parallel": int(definition.get("max_parallel") or 1),
             "enabled": bool(enabled),
             "credential_status": cred["credential_status"],
-            "credential_masked": cred["credential_masked"],
+            "credential": cred["credential"],
         }
-        if kind == "user":
-            view["definition"] = _public_definition(definition)
+        view["definition"] = _public_definition(definition)
         return view
 
 

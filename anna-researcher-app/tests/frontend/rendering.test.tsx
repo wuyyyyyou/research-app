@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { formatResearchQuery, hasCompletedResearchResult, makeIntroStepLabel, makeStepLabel } from "../../src/App";
+import { useState } from "react";
 import { ReportView } from "../../src/components/ReportView";
 import { ResearchForm } from "../../src/components/ResearchForm";
-import { ResearchSourcePanel } from "../../src/components/ResearchSourcePanel";
+import {
+  ResearchSourceDetailPage,
+  ResearchSourceListPage,
+  ResearchSourceNewPage,
+} from "../../src/components/ResearchSourcePanel";
 import { ResearchTimeline } from "../../src/components/ResearchTimeline";
 import { createTranslator, localeStorageKey } from "../../src/i18n/messages";
 import { useLocale } from "../../src/i18n/useLocale";
@@ -19,6 +24,20 @@ function LocaleProbe() {
       </button>
       <span>{t("queryLabel")}</span>
     </div>
+  );
+}
+
+function ControlledResearchForm(props: Omit<Parameters<typeof ResearchForm>[0], "briefName" | "researchNeed" | "onBriefNameChange" | "onResearchNeedChange">) {
+  const [briefName, setBriefName] = useState("");
+  const [researchNeed, setResearchNeed] = useState("");
+  return (
+    <ResearchForm
+      {...props}
+      briefName={briefName}
+      researchNeed={researchNeed}
+      onBriefNameChange={setBriefName}
+      onResearchNeedChange={setResearchNeed}
+    />
   );
 }
 
@@ -41,7 +60,7 @@ describe("ResearchForm", () => {
     const onStart = vi.fn();
     const onValidationError = vi.fn();
     render(
-      <ResearchForm
+      <ControlledResearchForm
         isBusy={false}
         canStart={true}
         t={t}
@@ -69,7 +88,7 @@ describe("ResearchForm", () => {
     const t = createTranslator("en");
     const onShowLastResult = vi.fn();
     render(
-      <ResearchForm
+      <ControlledResearchForm
         isBusy={false}
         canStart={true}
         t={t}
@@ -89,7 +108,7 @@ describe("ResearchForm", () => {
   it("keeps start disabled and shows the source configuration hint when no source is ready", () => {
     const t = createTranslator("en");
     render(
-      <ResearchForm
+      <ControlledResearchForm
         isBusy={false}
         canStart={false}
         t={t}
@@ -137,7 +156,7 @@ describe("research query composition", () => {
   });
 });
 
-describe("ResearchSourcePanel", () => {
+describe("Research Source pages", () => {
   function makeSource(overrides: Partial<ResearchSourceView> = {}): ResearchSourceView {
     return {
       id: "tavily",
@@ -146,37 +165,65 @@ describe("ResearchSourcePanel", () => {
       enabled: true,
       max_parallel: 3,
       credential_status: "configured",
-      credential_masked: "***test",
+      credential: "tvly-secret-test",
+      definition: {
+        id: "tavily",
+        name: "Tavily",
+        request: { method: "POST", url: "https://api.tavily.com/search" },
+        result: {
+          items_path: "results[]",
+          url: { mode: "path", value: "url" },
+          title: { mode: "path", value: "title" },
+          content: { mode: "paths", value: ["content"] },
+        },
+      },
       ...overrides,
     };
   }
 
-  it("renders nothing when closed", () => {
+  const mockTestSource = () =>
+    vi.fn().mockResolvedValue({
+      source_id: "tavily",
+      source_name: "Tavily",
+      query: "test",
+      duration_ms: 1,
+      pages: [],
+      extracted: [],
+      error: null,
+    });
+
+  it("renders a source list page and opens a selected source", () => {
     const t = createTranslator("en");
-    const { container } = render(
-      <ResearchSourcePanel
-        open={false}
+    const onOpenSource = vi.fn();
+    render(
+      <ResearchSourceListPage
         sources={[makeSource()]}
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
-        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+        onAdd={vi.fn()}
+        onOpenSource={onOpenSource}
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByRole("heading", { name: "Research Sources" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Tavily/i }));
+    expect(onOpenSource).toHaveBeenCalledWith("tavily");
   });
 
-  it("saves a credential and clears it via the modal controls", async () => {
+  it("saves a credential from the detail page", async () => {
     const t = createTranslator("en");
     const onSaveCredential = vi.fn().mockResolvedValue(undefined);
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource({ credential_status: "missing", credential_masked: "" })]}
+      <ResearchSourceDetailPage
+        source={makeSource({ credential_status: "missing", credential: "" })}
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
+        onBack={vi.fn()}
         onSaveCredential={onSaveCredential}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
       />,
     );
 
@@ -188,21 +235,24 @@ describe("ResearchSourcePanel", () => {
     );
   });
 
-  it("clears an existing credential", async () => {
+  it("clears an existing credential from the detail page", async () => {
     const t = createTranslator("en");
     const onSaveCredential = vi.fn().mockResolvedValue(undefined);
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource()]}
+      <ResearchSourceDetailPage
+        source={makeSource()}
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
+        onBack={vi.fn()}
         onSaveCredential={onSaveCredential}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete credential" }));
     await waitFor(() => expect(onSaveCredential).toHaveBeenCalledWith({ id: "tavily", clear: true }));
   });
 
@@ -210,14 +260,16 @@ describe("ResearchSourcePanel", () => {
     const t = createTranslator("en");
     const onToggleEnabled = vi.fn().mockResolvedValue(undefined);
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource({ enabled: true })]}
+      <ResearchSourceDetailPage
+        source={makeSource({ enabled: true })}
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
+        onBack={vi.fn()}
         onSaveCredential={vi.fn().mockResolvedValue(undefined)}
         onToggleEnabled={onToggleEnabled}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
       />,
     );
 
@@ -227,26 +279,76 @@ describe("ResearchSourcePanel", () => {
     await waitFor(() => expect(onToggleEnabled).toHaveBeenCalledWith({ id: "tavily", enabled: false }));
   });
 
-  it("submits a custom source definition through onAddSource", async () => {
+  it("reveals credentials and runs a source test from the detail page", async () => {
+    const t = createTranslator("en");
+    const onTestSource = vi.fn().mockResolvedValue({
+      source_id: "tavily",
+      source_name: "Tavily",
+      query: "anna",
+      duration_ms: 7,
+      extracted: [{ url: "https://example.com/a", title: "A", content: "Evidence" }],
+      pages: [
+        {
+          page: 1,
+          request: { method: "POST", url: "https://api.tavily.com/search", body: { api_key: "tvly-secret-test", query: "anna" } },
+          response: { status: 200, json: { results: [{ title: "A" }] }, text: "{\"results\":[{\"title\":\"A\"}]}" },
+          extracted: [{ url: "https://example.com/a", title: "A", content: "Evidence" }],
+        },
+      ],
+      error: null,
+    });
+    render(
+      <ResearchSourceDetailPage
+        source={makeSource()}
+        isBusy={false}
+        t={t}
+        onBack={vi.fn()}
+        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={onTestSource}
+      />,
+    );
+
+    expect(screen.getByText("***test")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show full credential" }));
+    expect(screen.getByText("tvly-secret-test")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    expect(screen.getByRole("dialog", { name: "Test Research Source" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Test query"), { target: { value: "anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+
+    await waitFor(() =>
+      expect(onTestSource).toHaveBeenCalledWith({
+        id: "tavily",
+        definition: expect.objectContaining({ id: "tavily" }),
+        query: "anna",
+      }),
+    );
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Test Result" })).toBeTruthy());
+    expect(screen.getByText(/Extracted url \/ title \/ content/)).toBeTruthy();
+    expect(screen.getAllByText(/tvly-secret-test/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/https:\/\/example\.com\/a/).length).toBeGreaterThan(0);
+  });
+
+  it("submits a custom source definition through the new source page", async () => {
     const t = createTranslator("en");
     const onAddSource = vi.fn().mockResolvedValue(undefined);
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource()]}
+      <ResearchSourceNewPage
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
-        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
         onAddSource={onAddSource}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add custom source" }));
     fireEvent.change(screen.getByLabelText("Source definition (JSON)"), {
       target: {
         value:
-          '{"id":"custom","name":"Custom","request":{"method":"GET","url":"https://api.example/?token={token}&q={query}"},"field_map":{"items_path":"results[]","url":"url","title":"title","content":["snippet"]}}',
+          '{"id":"custom","name":"Custom","request":{"method":"GET","url":"https://api.example/?token={token}&q={query}"},"result":{"items_path":"results[]","url":{"mode":"path","value":"url"},"title":{"mode":"path","value":"title"},"content":{"mode":"paths","value":["snippet"]}}}',
       },
     });
     fireEvent.change(screen.getByLabelText("Credential (optional)"), { target: { value: "secret-token" } });
@@ -260,22 +362,43 @@ describe("ResearchSourcePanel", () => {
     );
   });
 
+  it("shows the source JSON spec from the new source page and closes it with Escape", async () => {
+    const t = createTranslator("en");
+    render(
+      <ResearchSourceNewPage
+        isBusy={false}
+        t={t}
+        onBack={vi.fn()}
+        onAddSource={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Source JSON spec" }));
+
+    expect(screen.getByRole("dialog", { name: "Source JSON Definition Spec" })).toBeTruthy();
+    expect(screen.getByText("Complete Example")).toBeTruthy();
+    expect(screen.getByText(/"name": "Company Search"/)).toBeTruthy();
+    expect(screen.queryByText(/企业信息搜索/)).toBeNull();
+    expect(screen.getAllByText(/"result":/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\{token\}/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Do not put real API keys/)).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Source JSON Definition Spec" })).toBeNull());
+  });
+
   it("rejects invalid JSON for new source", async () => {
     const t = createTranslator("en");
     const onAddSource = vi.fn().mockResolvedValue(undefined);
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource()]}
+      <ResearchSourceNewPage
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
-        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
         onAddSource={onAddSource}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add custom source" }));
     fireEvent.change(screen.getByLabelText("Source definition (JSON)"), { target: { value: "not json" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
@@ -283,45 +406,111 @@ describe("ResearchSourcePanel", () => {
     expect(onAddSource).not.toHaveBeenCalled();
   });
 
-  it("calls onDeleteSource for user-defined sources after confirmation", async () => {
+  it("shows the source JSON spec from detail pages and closes it from the backdrop", async () => {
     const t = createTranslator("en");
-    const onDeleteSource = vi.fn().mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    try {
-      render(
-        <ResearchSourcePanel
-          open={true}
-          sources={[makeSource({ id: "custom", name: "Custom", kind: "user" })]}
-          isBusy={false}
-          t={t}
-          onClose={vi.fn()}
-          onSaveCredential={vi.fn().mockResolvedValue(undefined)}
-          onDeleteSource={onDeleteSource}
-        />,
-      );
+    render(
+      <ResearchSourceDetailPage
+        source={makeSource()}
+        isBusy={true}
+        t={t}
+        onBack={vi.fn()}
+        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
+      />,
+    );
 
-      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-      await waitFor(() => expect(onDeleteSource).toHaveBeenCalledWith({ id: "custom" }));
-    } finally {
-      confirmSpy.mockRestore();
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Source JSON spec" }));
+
+    expect(screen.getByRole("dialog", { name: "Source JSON Definition Spec" })).toBeTruthy();
+    expect(screen.getByText("Result Mapping")).toBeTruthy();
+    expect(screen.getByText(/url is used for deduplication/)).toBeTruthy();
+    expect(screen.getByText(/result.items_path points to an array/)).toBeTruthy();
+    expect(screen.getByText(/path abc.url reads item\.abc\.url/)).toBeTruthy();
+    expect(screen.getByText(/result.next_cursor is not relative to each item/)).toBeTruthy();
+    expect(screen.getByText(/"value": "names\[0\]\.text"/)).toBeTruthy();
+    expect(screen.getByText("Template Placeholders")).toBeTruthy();
+    expect(screen.getByText(/Only item\.\* and context\.\* are supported/)).toBeTruthy();
+    expect(screen.getAllByText(/{{item\.company_name}}/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/result templates cannot read token/)).toBeTruthy();
+
+    fireEvent.mouseDown(screen.getByRole("presentation"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Source JSON Definition Spec" })).toBeNull());
+  });
+
+  it("saves editable user source definitions and deletes user-defined sources after confirmation", async () => {
+    const t = createTranslator("en");
+    const onSaveDefinition = vi.fn().mockResolvedValue({ definition: { id: "custom", name: "Updated" } });
+    const onDeleteSource = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ResearchSourceDetailPage
+        source={makeSource({ id: "custom", name: "Custom", kind: "user" })}
+        isBusy={false}
+        t={t}
+        onBack={vi.fn()}
+        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={onSaveDefinition}
+        onDeleteSource={onDeleteSource}
+        onTestSource={mockTestSource()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Source definition (JSON)"), {
+      target: { value: '{"id":"custom","name":"Updated"}' },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save definition" }));
+    await waitFor(() => expect(onSaveDefinition).toHaveBeenCalledWith({ definition: { id: "custom", name: "Updated" } }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("dialog", { name: "Delete" })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
+    await waitFor(() => expect(onDeleteSource).toHaveBeenCalledWith({ id: "custom" }));
   });
 
   it("does not render a delete button for builtin sources", () => {
     const t = createTranslator("en");
     render(
-      <ResearchSourcePanel
-        open={true}
-        sources={[makeSource()]}
+      <ResearchSourceDetailPage
+        source={makeSource()}
         isBusy={false}
         t={t}
-        onClose={vi.fn()}
+        onBack={vi.fn()}
         onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
         onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
       />,
     );
 
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect((screen.getByLabelText("Source definition (JSON)") as HTMLTextAreaElement).readOnly).toBe(true);
+  });
+
+  it("disables source edits while research is busy", () => {
+    const t = createTranslator("en");
+    render(
+      <ResearchSourceDetailPage
+        source={makeSource({ id: "custom", name: "Custom", kind: "user" })}
+        isBusy={true}
+        t={t}
+        onBack={vi.fn()}
+        onSaveCredential={vi.fn().mockResolvedValue(undefined)}
+        onToggleEnabled={vi.fn().mockResolvedValue(undefined)}
+        onSaveDefinition={vi.fn().mockResolvedValue(undefined)}
+        onDeleteSource={vi.fn().mockResolvedValue(undefined)}
+        onTestSource={mockTestSource()}
+      />,
+    );
+
+    expect((screen.getByRole("checkbox", { name: /Custom Enabled/i }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Replace credential" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Test" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save definition" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

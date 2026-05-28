@@ -19,8 +19,7 @@ def mask_secret(value: str) -> str:
 
 
 class CredentialStore:
-    """File-backed credential storage. Secrets never leave the store in full
-    except via :meth:`get_token`, which is consumed only by the executor."""
+    """File-backed credential storage."""
 
     def __init__(self, root: Path):
         self.root = root
@@ -60,8 +59,8 @@ class CredentialStore:
     def status(self, source_id: str) -> dict[str, Any]:
         token = self.get_token(source_id)
         if not token:
-            return {"credential_status": "missing", "credential_masked": ""}
-        return {"credential_status": "configured", "credential_masked": mask_secret(token)}
+            return {"credential_status": "missing", "credential": ""}
+        return {"credential_status": "configured", "credential": token}
 
     def set_token(self, source_id: str, token: str) -> dict[str, Any]:
         clean = str(token or "").strip()

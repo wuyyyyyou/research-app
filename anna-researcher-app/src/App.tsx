@@ -3,7 +3,11 @@ import { AnnaResearchApi, createStandaloneApi, type ResearchApi } from "./api/re
 import { LanguageToggle } from "./components/LanguageToggle";
 import { ReportView } from "./components/ReportView";
 import { ResearchForm } from "./components/ResearchForm";
-import { ResearchSourcePanel } from "./components/ResearchSourcePanel";
+import {
+  ResearchSourceDetailPage,
+  ResearchSourceListPage,
+  ResearchSourceNewPage,
+} from "./components/ResearchSourcePanel";
 import { ResearchTimeline } from "./components/ResearchTimeline";
 import { StatusPanel } from "./components/StatusPanel";
 import { MAX_RESEARCH_ITERATIONS, useResearchJob } from "./hooks/useResearchJob";
@@ -21,8 +25,11 @@ export function App() {
   const { locale, setLocale, t } = useLocale();
   const [api, setApi] = useState<ResearchApi>(() => createStandaloneApi());
   const [validationMessage, setValidationMessage] = useState("");
-  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"intro" | "result">("intro");
+  const [appPage, setAppPage] = useState<"intro" | "result" | "sources" | "source-detail" | "source-new">("intro");
+  const [sourceReturnPage, setSourceReturnPage] = useState<"intro" | "result">("intro");
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [briefNameDraft, setBriefNameDraft] = useState("");
+  const [researchNeedDraft, setResearchNeedDraft] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -53,27 +60,60 @@ export function App() {
   const isMessageError = Boolean(validationMessage || asyncErrorMessage || jobMessage.isError);
 
   const sourceResult = useMemo(() => research.result, [research.result]);
+  const selectedSource = useMemo(
+    () => research.sources.find((source) => source.id === selectedSourceId) ?? null,
+    [research.sources, selectedSourceId],
+  );
   const ready = research.canStart;
   const stepLabel = makeIntroStepLabel(research.job?.max_iterations);
   const hasCompletedResult = hasCompletedResearchResult(research.job, sourceResult);
-  const showIntroPage = viewMode === "intro" && !research.isBusy;
+  const showIntroPage = appPage === "intro" && !research.isBusy;
 
   function start(input: { briefName: string; researchNeed: string }) {
     setValidationMessage("");
-    setViewMode("result");
+    setAppPage("result");
     void research.start(formatResearchQuery(input, locale));
   }
 
   function showLastResult() {
     if (hasCompletedResult) {
       setValidationMessage("");
-      setViewMode("result");
+      setAppPage("result");
     }
   }
 
   function showNewResearch() {
     setValidationMessage("");
-    setViewMode("intro");
+    setAppPage("intro");
+  }
+
+  function showSources() {
+    setValidationMessage("");
+    setSourceReturnPage(appPage === "result" ? "result" : "intro");
+    setAppPage("sources");
+  }
+
+  function returnFromSources() {
+    setValidationMessage("");
+    setSelectedSourceId("");
+    setAppPage(sourceReturnPage);
+  }
+
+  function showSourceDetail(id: string) {
+    setValidationMessage("");
+    setSelectedSourceId(id);
+    setAppPage("source-detail");
+  }
+
+  function showNewSource() {
+    setValidationMessage("");
+    setSelectedSourceId("");
+    setAppPage("source-new");
+  }
+
+  function backToSourceList() {
+    setValidationMessage("");
+    setAppPage("sources");
   }
 
   async function saveCredential(input: { id: string; credential?: string; clear?: boolean }) {
@@ -91,9 +131,19 @@ export function App() {
     await research.upsertSource(input);
   }
 
+  async function saveSourceDefinition(input: { definition: Record<string, unknown> }) {
+    setValidationMessage("");
+    return research.upsertSource(input);
+  }
+
   async function deleteSource(input: { id: string }) {
     setValidationMessage("");
     await research.deleteSource(input);
+  }
+
+  async function testSource(input: { id: string; definition: Record<string, unknown>; query: string }) {
+    setValidationMessage("");
+    return research.testSource(input);
   }
 
   return (
@@ -106,21 +156,53 @@ export function App() {
           </div>
           <div className="topbar-actions">
             <LanguageToggle locale={locale} setLocale={setLocale} t={t} />
-            <button type="button" className="secondary source-button" onClick={() => setSourcePanelOpen(true)} data-testid="open-source-panel">
+            <button type="button" className="secondary source-button" onClick={showSources} data-testid="open-source-panel">
               {t("sourcesButton")}
             </button>
           </div>
         </header>
 
         <div className="app-window-body">
-          {showIntroPage ? (
+          {appPage === "sources" ? (
+            <ResearchSourceListPage
+              sources={research.sources}
+              isBusy={research.isBusy}
+              t={t}
+              onBack={returnFromSources}
+              onAdd={showNewSource}
+              onOpenSource={showSourceDetail}
+            />
+          ) : appPage === "source-detail" ? (
+            <ResearchSourceDetailPage
+              source={selectedSource}
+              isBusy={research.isBusy}
+              t={t}
+              onBack={backToSourceList}
+              onSaveCredential={saveCredential}
+              onToggleEnabled={toggleSourceEnabled}
+              onSaveDefinition={saveSourceDefinition}
+              onDeleteSource={deleteSource}
+              onTestSource={testSource}
+            />
+          ) : appPage === "source-new" ? (
+            <ResearchSourceNewPage
+              isBusy={research.isBusy}
+              t={t}
+              onBack={backToSourceList}
+              onAddSource={addSource}
+            />
+          ) : showIntroPage ? (
             <ResearchForm
               isBusy={research.isBusy}
               canStart={ready}
+              briefName={briefNameDraft}
+              researchNeed={researchNeedDraft}
               t={t}
               stepLabel={stepLabel}
               validationMessage={validationMessage}
               canShowLastResult={hasCompletedResult}
+              onBriefNameChange={setBriefNameDraft}
+              onResearchNeedChange={setResearchNeedDraft}
               onShowLastResult={showLastResult}
               onStart={start}
               onValidationError={setValidationMessage}
@@ -139,18 +221,6 @@ export function App() {
           )}
         </div>
       </section>
-
-      <ResearchSourcePanel
-        open={sourcePanelOpen}
-        sources={research.sources}
-        isBusy={research.isBusy}
-        t={t}
-        onClose={() => setSourcePanelOpen(false)}
-        onSaveCredential={saveCredential}
-        onToggleEnabled={toggleSourceEnabled}
-        onAddSource={addSource}
-        onDeleteSource={deleteSource}
-      />
     </main>
   );
 }

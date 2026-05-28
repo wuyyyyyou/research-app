@@ -46,8 +46,36 @@ export interface ResearchSourceView {
   enabled: boolean;
   max_parallel: number;
   credential_status: "missing" | "configured" | string;
-  credential_masked?: string;
+  credential?: string;
   definition?: Record<string, unknown>;
+}
+
+export interface ResearchSourceTestPage {
+  page: number;
+  context?: Record<string, string>;
+  request: Record<string, unknown>;
+  response?: {
+    status?: number;
+    headers?: Record<string, string>;
+    text?: string;
+    json?: unknown;
+  };
+  extracted?: SearchResult[];
+  next_cursor?: string;
+}
+
+export interface ResearchSourceTestResult {
+  source_id: string;
+  source_name: string;
+  query: string;
+  duration_ms: number;
+  pages: ResearchSourceTestPage[];
+  extracted: SearchResult[];
+  error?: {
+    code?: string;
+    message?: string;
+    detail?: unknown;
+  } | null;
 }
 
 export interface SourceCallSummary {

@@ -1,13 +1,16 @@
-import { useState } from "react";
 import type { MessageKey } from "../i18n/messages";
 
 interface Props {
   isBusy: boolean;
   canStart: boolean;
+  briefName: string;
+  researchNeed: string;
   t(key: MessageKey): string;
   stepLabel: string;
   validationMessage: string;
   canShowLastResult: boolean;
+  onBriefNameChange(value: string): void;
+  onResearchNeedChange(value: string): void;
   onShowLastResult(): void;
   onStart(input: { briefName: string; researchNeed: string }): void;
   onValidationError(message: string): void;
@@ -16,17 +19,18 @@ interface Props {
 export function ResearchForm({
   isBusy,
   canStart,
+  briefName,
+  researchNeed,
   t,
   stepLabel,
   validationMessage,
   canShowLastResult,
+  onBriefNameChange,
+  onResearchNeedChange,
   onShowLastResult,
   onStart,
   onValidationError,
 }: Props) {
-  const [briefName, setBriefName] = useState("");
-  const [researchNeed, setResearchNeed] = useState("");
-
   function submit() {
     const trimmedNeed = researchNeed.trim();
     if (!trimmedNeed) {
@@ -59,7 +63,7 @@ export function ResearchForm({
           type="text"
           placeholder={t("briefNamePlaceholder")}
           value={briefName}
-          onChange={(event) => setBriefName(event.target.value)}
+          onChange={(event) => onBriefNameChange(event.target.value)}
         />
       </div>
       <div className="field-stack">
@@ -69,7 +73,7 @@ export function ResearchForm({
           rows={5}
           placeholder={t("researchNeedPlaceholder")}
           value={researchNeed}
-          onChange={(event) => setResearchNeed(event.target.value)}
+          onChange={(event) => onResearchNeedChange(event.target.value)}
         />
         <p className="helper-text">{t("researchHelperText")}</p>
       </div>

@@ -24,7 +24,7 @@ function makeApi(options: ApiOptions = {}) {
     enabled: true,
     max_parallel: 3,
     credential_status: configured ? "configured" : "missing",
-    credential_masked: configured ? "***test" : "",
+    credential: configured ? "tvly-test" : "",
   };
   const sourcesList = options.sources ?? [tavilySource];
   const replies = options.llmReplies ?? [];
@@ -62,12 +62,24 @@ function makeApi(options: ApiOptions = {}) {
         enabled: true,
         max_parallel: 1,
         credential_status: input.credential ? "configured" : "missing",
-        credential_masked: input.credential ? `***${input.credential.slice(-4)}` : "",
+        credential: input.credential || "",
       };
     },
     async deleteResearchSource(input) {
       calls.push(["deleteResearchSource", input]);
       return { id: input.id, deleted: true };
+    },
+    async testResearchSource(input) {
+      calls.push(["testResearchSource", input]);
+      return {
+        source_id: input.id,
+        source_name: input.id,
+        query: input.query,
+        duration_ms: 1,
+        pages: [],
+        extracted: [],
+        error: null,
+      };
     },
     async getResearchJob() {
       calls.push(["getResearchJob"]);
@@ -258,7 +270,7 @@ describe("useResearchJob (iterative loop)", () => {
       enabled: true,
       max_parallel: 3,
       credential_status: "configured",
-      credential_masked: "***tav",
+      credential: "token-tav",
     };
     const custom: ResearchSourceView = {
       id: "custom",
@@ -267,7 +279,7 @@ describe("useResearchJob (iterative loop)", () => {
       enabled: true,
       max_parallel: 1,
       credential_status: "configured",
-      credential_masked: "***cus",
+      credential: "token-cus",
     };
     const { api, calls, llmCalls } = makeApi({
       sources: [tavily, custom],
@@ -302,7 +314,7 @@ describe("useResearchJob (iterative loop)", () => {
       enabled: true,
       max_parallel: 3,
       credential_status: "configured",
-      credential_masked: "***tav",
+      credential: "token-tav",
     };
     const { api, calls } = makeApi({
       sources: [tavily],

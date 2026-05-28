@@ -5,6 +5,7 @@ import type {
   ResearchJob,
   ResearchPhase,
   ResearchResult,
+  ResearchSourceTestResult,
   ResearchSourceView,
   ToolSettings,
 } from "../types";
@@ -131,6 +132,13 @@ export function useResearchJob(api: ResearchApi) {
       return result;
     },
     [api, sources],
+  );
+
+  const testSource = useCallback(
+    async (input: { id: string; definition: Record<string, unknown>; query: string }): Promise<ResearchSourceTestResult> => {
+      return api.testResearchSource(input);
+    },
+    [api],
   );
 
   const start = useCallback(
@@ -277,6 +285,7 @@ export function useResearchJob(api: ResearchApi) {
     setSourceEnabled,
     upsertSource,
     deleteSource,
+    testSource,
     start,
   };
 }

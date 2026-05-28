@@ -73,7 +73,7 @@ def test_legacy_tavily_key_migration_is_idempotent(tmp_path):
     assert migrate_legacy_tavily_key(settings, creds) is True
     assert "tavily_api_key" not in settings.read_raw()
     assert creds.get_token("tavily") == "tvly-legacy-key-aaaa"
-    assert creds.status("tavily")["credential_masked"] == "***aaaa"
+    assert creds.status("tavily")["credential"] == "tvly-legacy-key-aaaa"
 
     # Re-running the migration is a no-op.
     assert migrate_legacy_tavily_key(settings, creds) is False
@@ -82,9 +82,9 @@ def test_legacy_tavily_key_migration_is_idempotent(tmp_path):
 
 def test_credential_store_set_clear_remove(tmp_path):
     creds = CredentialStore(tmp_path / ".research")
-    assert creds.status("tavily") == {"credential_status": "missing", "credential_masked": ""}
+    assert creds.status("tavily") == {"credential_status": "missing", "credential": ""}
     status = creds.set_token("tavily", "tvly-abcdef1234")
-    assert status == {"credential_status": "configured", "credential_masked": "***1234"}
+    assert status == {"credential_status": "configured", "credential": "tvly-abcdef1234"}
     creds.clear("tavily")
     assert creds.get_token("tavily") == ""
     creds.set_token("custom", "secret-zzzz")
@@ -166,11 +166,11 @@ def _user_envelope(**overrides):
             "url": "https://api.example/search?token={token}&q={query}",
         },
         "pagination": {"mode": "none", "max_pages": 1},
-        "field_map": {
+        "result": {
             "items_path": "results[]",
-            "url": "url",
-            "title": "title",
-            "content": ["snippet"],
+            "url": {"mode": "path", "value": "url"},
+            "title": {"mode": "path", "value": "title"},
+            "content": {"mode": "paths", "value": ["snippet"]},
         },
         "response": {"content_type": "application/json"},
     }
@@ -207,8 +207,20 @@ def test_envelope_accepts_minimal_user_definition():
         ),
         (lambda d: d.__setitem__("pagination", {"mode": "rolling", "max_pages": 1}), "pagination_mode_invalid"),
         (lambda d: d.__setitem__("pagination", {"mode": "page", "max_pages": 99}), "max_pages_exceeds_cap"),
-        (lambda d: d["field_map"].pop("url"), "field_map_missing_url"),
-        (lambda d: d["field_map"].__setitem__("content", []), "field_map_content_must_be_nonempty_array"),
+        (lambda d: d["result"].pop("url"), "result_url_required"),
+        (lambda d: d["result"].__setitem__("content", {"mode": "paths", "value": []}), "result_content_paths_must_be_nonempty_array"),
+        (
+            lambda d: d["result"].__setitem__("title", {"mode": "none"}),
+            "result_title_mode_invalid",
+        ),
+        (
+            lambda d: d["result"].__setitem__("url", {"mode": "template", "value": "https://example.test/{{context.token}}"}),
+            "result_template_token_not_allowed",
+        ),
+        (
+            lambda d: d["result"].__setitem__("content", {"mode": "template", "value": "bad {{query}}"}),
+            "result_template_placeholder_invalid",
+        ),
         (
             lambda d: d.__setitem__("response", {"content_type": "text/html"}),
             "response_must_be_json",
@@ -229,7 +241,7 @@ def test_envelope_rejects_invalid_shapes(mutator, expected_reason):
 # ---------------------------------------------------------------------------
 
 
-def test_registry_lists_builtin_tavily_with_credential_masking(tmp_path):
+def test_registry_lists_builtin_tavily_with_credential(tmp_path):
     root = tmp_path / ".research"
     creds = CredentialStore(root)
     registry = ResearchSourceRegistry(root, credentials=creds)
@@ -237,11 +249,15 @@ def test_registry_lists_builtin_tavily_with_credential_masking(tmp_path):
     assert [v["id"] for v in views] == ["tavily"]
     assert views[0]["kind"] == "builtin"
     assert views[0]["credential_status"] == "missing"
+    assert views[0]["definition"]["id"] == "tavily"
+    assert views[0]["definition"]["request"]["body"]["api_key"] == "{token}"
+    assert "credential" not in views[0]["definition"]
+    assert "token" not in views[0]["definition"]
 
     creds.set_token("tavily", "tvly-secret-1234")
     refreshed = registry.get_view("tavily")
     assert refreshed["credential_status"] == "configured"
-    assert refreshed["credential_masked"] == "***1234"
+    assert refreshed["credential"] == "tvly-secret-1234"
 
 
 def test_registry_rejects_user_attempt_to_override_builtin(tmp_path):
@@ -385,6 +401,59 @@ def test_executor_retries_get_once_on_rate_limit():
     assert len(result.items) == 1
 
 
+def test_executor_supports_result_templates_and_single_object_items():
+    definition = _user_envelope(
+        result={
+            "items_path": "company",
+            "url": {"mode": "template", "value": "https://example.test/search?q={{context.query}}"},
+            "title": {"mode": "template", "value": "{{item.name}} company profile"},
+            "content": {
+                "mode": "template",
+                "value": "Company: {{item.name}}\nLegal person: {{item.people[0].name}}\nScope: {{item.scope}}",
+            },
+        }
+    )
+    executor = ResearchSourceExecutor(
+        token_provider=lambda sid: "tok",
+        http_open=fake_http({"company": {"name": "ACME", "people": [{"name": "Ada"}], "scope": "Research apps"}}),
+        sleep=lambda _: None,
+    )
+    result = executor.call(definition, "anna app")
+    assert result.error is None
+    assert len(result.items) == 1
+    assert result.items[0]["url"] == "https://example.test/search?q=anna app"
+    assert result.items[0]["title"] == "ACME company profile"
+    assert "Legal person: Ada" in result.items[0]["content"]
+
+
+def test_executor_supports_url_none_and_rejects_scalar_items_path():
+    none_url = _user_envelope(
+        result={
+            "items_path": "result",
+            "url": {"mode": "none"},
+            "title": {"mode": "path", "value": "name"},
+            "content": {"mode": "paths", "value": ["scope"]},
+        }
+    )
+    executor = ResearchSourceExecutor(
+        token_provider=lambda sid: "tok",
+        http_open=fake_http({"result": {"name": "ACME", "scope": "Research apps"}}),
+        sleep=lambda _: None,
+    )
+    result = executor.call(none_url, "anna")
+    assert result.error is None
+    assert result.items[0]["url"] == ""
+
+    scalar = dict(none_url)
+    executor = ResearchSourceExecutor(
+        token_provider=lambda sid: "tok",
+        http_open=fake_http({"result": "not an object"}),
+        sleep=lambda _: None,
+    )
+    result = executor.call(scalar, "anna")
+    assert result.error == "bad_definition"
+
+
 def test_executor_does_not_retry_post():
     calls = {"n": 0}
 
@@ -421,7 +490,12 @@ def test_executor_paginates_in_page_mode_until_empty():
         "name": "Pager",
         "request": {"method": "GET", "url": "https://x.com/?token={token}&q={query}&page={page}"},
         "pagination": {"mode": "page", "max_pages": 5, "page_size": 1, "start_page": 1},
-        "field_map": {"items_path": "results[]", "url": "url", "title": "title", "content": ["content"]},
+        "result": {
+            "items_path": "results[]",
+            "url": {"mode": "path", "value": "url"},
+            "title": {"mode": "path", "value": "title"},
+            "content": {"mode": "paths", "value": ["content"]},
+        },
         "response": {"content_type": "application/json"},
     }
     executor = ResearchSourceExecutor(token_provider=lambda sid: "tok", http_open=opener, sleep=lambda _: None)
@@ -430,6 +504,22 @@ def test_executor_paginates_in_page_mode_until_empty():
     assert len(result.items) == 2
     assert "page=1" in seen_pages[0]
     assert "page=2" in seen_pages[1]
+
+
+def test_executor_test_returns_request_response_and_extracted_items():
+    definition = builtin_tavily_definition()
+    executor = ResearchSourceExecutor(
+        token_provider=lambda sid: "tvly-secret-abcd",
+        http_open=fake_http({"results": [{"url": "https://x.com/1", "title": "Title", "content": "Evidence"}]}),
+        sleep=lambda _: None,
+    )
+    result = executor.test(definition, "anna")
+    assert result.error is None
+    assert result.pages[0]["request"]["method"] == "POST"
+    assert result.pages[0]["request"]["body"]["api_key"] == "tvly-secret-abcd"
+    assert result.pages[0]["response"]["json"]["results"][0]["title"] == "Title"
+    assert result.extracted[0]["url"] == "https://x.com/1"
+    assert result.extracted[0]["content"] == "Evidence"
 
 
 def test_resolve_path_handles_dot_and_index_segments():
@@ -529,6 +619,35 @@ def test_app_search_web_is_removed(tmp_path):
         dispatcher.dispatch("app_search_web", {"research_id": job["research_id"], "search_queries": ["anna"]})
 
 
+def test_app_test_research_source_uses_draft_definition_and_saved_credential(tmp_path):
+    dispatcher = make_dispatcher(tmp_path)
+    dispatcher.dispatch("app_update_research_source_credential", {"id": "tavily", "credential": "tvly-secret-abcd"})
+
+    def fake_http(request, timeout=None):
+        return FakeResponse(
+            json.dumps({"items": [{"href": "https://draft.example/a", "name": "Draft title", "body": "Draft body"}]}).encode("utf-8")
+        )
+
+    dispatcher.executor = ResearchSourceExecutor(
+        token_provider=dispatcher._token_for, http_open=fake_http, sleep=lambda _: None
+    )
+    draft = dict(builtin_tavily_definition())
+    draft["result"] = {
+        "items_path": "items[]",
+        "url": {"mode": "path", "value": "href"},
+        "title": {"mode": "path", "value": "name"},
+        "content": {"mode": "paths", "value": ["body"]},
+    }
+    result = dispatcher.dispatch(
+        "app_test_research_source",
+        {"id": "tavily", "definition": draft, "query": "anna"},
+    )["test"]
+    assert result["pages"][0]["request"]["body"]["api_key"] == "tvly-secret-abcd"
+    assert result["pages"][0]["response"]["json"]["items"][0]["name"] == "Draft title"
+    assert result["extracted"][0]["url"] == "https://draft.example/a"
+    assert result["extracted"][0]["title"] == "Draft title"
+
+
 # ---------------------------------------------------------------------------
 # Source list, credential updates, enabled flag
 # ---------------------------------------------------------------------------
@@ -542,15 +661,16 @@ def test_app_list_research_sources_returns_builtin(tmp_path):
     assert sources[0]["credential_status"] == "missing"
 
 
-def test_update_research_source_credential_masks_and_clears(tmp_path):
+def test_update_research_source_credential_returns_plain_credential_and_clears(tmp_path):
     dispatcher = make_dispatcher(tmp_path)
     saved = dispatcher.dispatch(
         "app_update_research_source_credential", {"id": "tavily", "credential": "tvly-secret-abcd"}
     )["source"]
     assert saved["credential_status"] == "configured"
-    assert saved["credential_masked"] == "***abcd"
+    assert saved["credential"] == "tvly-secret-abcd"
     cleared = dispatcher.dispatch("app_update_research_source_credential", {"id": "tavily", "clear": True})["source"]
     assert cleared["credential_status"] == "missing"
+    assert cleared["credential"] == ""
 
 
 def test_set_research_source_enabled_round_trip(tmp_path):

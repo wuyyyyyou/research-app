@@ -40,3 +40,4 @@ def test_bundle_does_not_contain_legacy_research_action_contract():
     assert "app_upsert_research_source" in bundle_js
     assert "app_delete_research_source" in bundle_js
     assert "app_set_research_source_enabled" in bundle_js
+    assert "app_test_research_source" in bundle_js

@@ -12,8 +12,10 @@ from .result_transfer import LocalResultTransferServer
 from .settings import SettingsStore, default_research_root
 from .sources import (
     CredentialStore,
+    EnvelopeError,
     ResearchSourceExecutor,
     ResearchSourceRegistry,
+    validate_envelope,
     migrate_legacy_tavily_key,
 )
 from .views import compact_job_view, source_view, status_view
@@ -116,6 +118,8 @@ class AppDispatcher:
             return self._upsert_source(args)
         if method == "app_delete_research_source":
             return self._delete_source(args)
+        if method == "app_test_research_source":
+            return self._test_source(args)
         if method == "app_call_research_source":
             return self._call_source(args)
         if method == "app_select_context":
@@ -178,6 +182,40 @@ class AppDispatcher:
         source_id = required_string(args, "id")
         self.registry.delete_user_source(source_id)
         return {"id": source_id, "deleted": True}
+
+    def _test_source(self, args: dict[str, Any]) -> dict[str, Any]:
+        source_id = required_string(args, "id")
+        query = required_string(args, "query")
+        definition = args.get("definition")
+        if not isinstance(definition, dict):
+            raise ValidationError("definition must be an object")
+        if not self._source_exists(source_id):
+            raise ValidationError(f"unknown research source: {source_id}")
+
+        test_definition = dict(definition)
+        test_definition["id"] = source_id
+        test_definition.setdefault("name", definition.get("name") or source_id)
+        try:
+            validate_envelope(test_definition, kind="builtin" if self.registry.is_builtin(source_id) else "user")
+        except EnvelopeError:
+            raise
+
+        token = self._token_for(source_id)
+        if not token:
+            raise ConfigurationError(f"credential missing for source: {source_id}")
+
+        result = self.executor.test(test_definition, query)
+        return {
+            "test": {
+                "source_id": result.source_id,
+                "source_name": result.source_name,
+                "query": result.query,
+                "duration_ms": result.duration_ms,
+                "pages": result.pages,
+                "extracted": result.extracted,
+                "error": result.error,
+            }
+        }
 
     def _call_source(self, args: dict[str, Any]) -> dict[str, Any]:
         research_id = required_string(args, "research_id")
