@@ -68,7 +68,11 @@ class SettingsStore:
 
 
 def mask_secret(value: str) -> str:
-    if len(value) <= 8:
-        return "****"
-    return f"{value[:4]}...{value[-4:]}"
+    """Front-0-back-4 mask shared with the credential store."""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if len(text) <= 4:
+        return "*" * len(text)
+    return "***" + text[-4:]
 

@@ -17,10 +17,15 @@ APP_METHODS = [
     "app_update_settings",
     "app_create_research_job",
     "app_update_research_job",
-    "app_search_web",
+    "app_get_research_job",
+    "app_list_research_sources",
+    "app_update_research_source_credential",
+    "app_set_research_source_enabled",
+    "app_upsert_research_source",
+    "app_delete_research_source",
+    "app_call_research_source",
     "app_select_context",
     "app_save_research_result",
-    "app_get_research_job",
 ]
 
 MANIFEST: dict[str, Any] = {

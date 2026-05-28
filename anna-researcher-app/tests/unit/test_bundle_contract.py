@@ -20,9 +20,21 @@ def test_bundle_does_not_contain_legacy_research_action_contract():
     assert 'method: "research"' not in bundle_js
     assert 'action:"advance"' not in bundle_js
     assert '"action":"advance"' not in bundle_js
+    # Legacy tavily-bespoke surfaces must be gone after Slice 1
+    assert "app_search_web" not in bundle_js
+    assert "query_domains" not in bundle_js
+    # New unified Research Source surface must be present
     assert "app_create_research_job" in bundle_js
     assert "app_save_research_result" in bundle_js
+    assert "app_call_research_source" in bundle_js
+    assert "app_list_research_sources" in bundle_js
+    assert "app_update_research_source_credential" in bundle_js
     assert "uploadResearchResult" in bundle_js
-    assert "saveResearchResult({research_id:" in bundle_js
-    assert "uploadResearchResult(mt,{report_markdown:" in bundle_js
     assert "selected_sources" not in bundle_js
+    # Slice 2: iterative loop is owned by the frontend
+    assert "decide_next_action" in bundle_js
+    assert "max_iterations" in bundle_js
+    # Slice 3: user-source CRUD surface is wired in the bundle
+    assert "app_upsert_research_source" in bundle_js
+    assert "app_delete_research_source" in bundle_js
+    assert "app_set_research_source_enabled" in bundle_js

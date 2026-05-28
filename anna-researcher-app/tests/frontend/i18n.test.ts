@@ -23,12 +23,12 @@ describe("localized status mapping", () => {
   it("maps stable status and stage values", () => {
     const t = createTranslator("en");
     expect(localizedStatusLabel("running", t)).toBe("Running");
-    expect(localizedStageMessage({ stage: "search_next_query", search_index: 2, search_total: 4 }, t)).toBe("Searching 2/4.");
+    expect(localizedStageMessage({ stage: "search_next_query", search_index: 2, search_total: 4 }, t)).toBe("Calling research source 2/4.");
   });
 
   it("maps known errors and preserves raw details", () => {
     const t = createTranslator("en");
-    expect(localizedError({ code: "missing_tavily_credential", message: "TAVILY_API_KEY missing" }, t)).toContain("Missing Tavily credential");
+    expect(localizedError({ code: "missing_tavily_credential", message: "TAVILY_API_KEY missing" }, t)).toContain("Missing research source credential");
     expect(localizedError({ code: "missing_tavily_credential", message: "TAVILY_API_KEY missing" }, t)).toContain("Technical details");
     expect(localizedError({ code: "sampling_error", message: "sampling/createMessage timed out after 45.0s" }, t)).toContain("Anna Sampling failed");
     expect(localizedError({ code: "tool_failed", message: "executa timed out" }, t)).toContain("Research tool invocation failed");

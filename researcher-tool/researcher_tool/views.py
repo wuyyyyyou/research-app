@@ -46,8 +46,34 @@ def compact_job_view(job: dict[str, Any]) -> dict[str, Any]:
     data["search_queries"] = job.get("search_queries") or []
     data["source_urls"] = job.get("source_urls") or []
     data["source_count"] = len(job.get("source_urls") or [])
+    data["iterations"] = [iteration_view(it) for it in (job.get("iterations") or [])]
+    data["research_log"] = job.get("research_log") or []
+    data["iteration"] = int(job.get("iteration") or 0)
+    data["max_iterations"] = int(job.get("max_iterations") or 5)
+    data["enabled_sources"] = job.get("enabled_sources") or []
+    data["schema_version"] = int(job.get("schema_version") or 1)
     data["result"] = result_view(job, include_sources=False) if job.get("report_markdown") else None
     return data
+
+
+def iteration_view(entry: dict[str, Any]) -> dict[str, Any]:
+    """Public view of one iteration entry; ``raw_results`` is never exposed."""
+    return {
+        "iteration": int(entry.get("iteration") or 0),
+        "source_id": entry.get("source_id") or "",
+        "source_name": entry.get("source_name") or "",
+        "queries": entry.get("queries") or [],
+        "results_count": int(entry.get("results_count") or 0),
+        "source_calls": [
+            {k: v for k, v in (call or {}).items() if k != "items"}
+            for call in (entry.get("source_calls") or [])
+        ],
+        "appended_at": entry.get("appended_at"),
+    }
+
+
+def source_view(source: dict[str, Any]) -> dict[str, Any]:
+    return dict(source)
 
 
 def job_view(job: dict[str, Any]) -> dict[str, Any]:

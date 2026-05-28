@@ -127,17 +127,50 @@ _Avoid_: Fixed-only researcher role, implicit role selection
 **Bounded Query Planning**:
 The planning behavior where Frontend LLM Completion may generate a small structured set of search queries, while the original user query is always retained and invalid planning output falls back to the original query. It excludes iterative deep-research planning.
 _Avoid_: Unbounded query expansion, deep research planning
+_Deprecated_: Superseded by Iterative Research Loop. Kept here so historical references stay readable. New design replaces a single upfront query plan with one Research Step Decision per loop iteration.
+
+**Iterative Research Loop**:
+The frontend-owned multi-turn orchestration where the Anna Research Orchestrator alternates a Research Step Decision call against Anna Sampling LLM with one Research Source call, accumulating a Research Step Log until the LLM decides the evidence is sufficient or a safety cap of five iterations is reached. It replaces a single upfront query plan and remains own-orchestrated rather than handed off to Anna Agent.
+_Avoid_: Anna Agent session, single-shot planning, backend-owned research loop
+
+**Research Step Decision**:
+The per-iteration structured output from Frontend LLM Completion inside the Iterative Research Loop: either a call decision naming one enabled Research Source and one or more queries for it, or a finish decision with a short reason. The decision excludes free-form tool calls and excludes calling multiple Research Sources in one iteration.
+_Avoid_: Multi-source per-iteration call, free-form LLM tool call
+
+**Research Step Log**:
+The compact running summary of completed Research Step Decision calls fed back into the next decision prompt. Each entry records the iteration index, the Research Source identifier, the query, the result count, and the top result titles, so the LLM can avoid duplicate calls without re-reading raw results. It is not the persisted Research Result and is not exposed as user copy.
+_Avoid_: Raw retrieval payload, full LLM transcript
 
 **Tavily Summary Retrieval**:
 The retrieval behavior where the Researcher Tool Backend uses Tavily search results as the source text for context selection, without independently scraping each result URL. It may merge results from multiple frontend-planned search queries, and source URLs are preserved as evidence while full-page extraction is deferred.
 _Avoid_: Browser scraping, full-page extraction, image scraping
+
+**Research Source**:
+A named retrieval capability that the Anna Research Orchestrator can call to gather evidence for a research job. Each Research Source produces a stream of result items normalized to the shape consumed by the Lexical Context Selector, so Tavily and user-added external APIs participate in the same downstream pipeline.
+_Avoid_: Retriever (backend-only term), data source (too generic), API connector (too implementation-flavored)
+
+**Built-in Research Source**:
+A Research Source whose configuration, request shape, and response mapping are owned by the Researcher Tool Backend and ship as part of the tool. Tavily Summary Retrieval is the first Built-in Research Source.
+_Avoid_: Default retriever, hardcoded search backend
+
+**User-Configured Research Source**:
+A Research Source defined by the app user — a remote API endpoint plus the request, authentication, response mapping, pagination, and natural-language description needed for the Anna Research Orchestrator to invoke it. The user adds, edits, and removes these without changes to the Researcher Tool Backend or Anna App Shell source.
+_Avoid_: Custom retriever (sounds like a code-level extension), plugin source
+
+**Configurable Research Source Envelope**:
+The supported request/response shape for User-Configured Research Source: JSON over HTTP using GET or POST, with the API key carried in either a request header or a query parameter, a flat response item array reachable by a fixed path, and at most one of page-number, offset, or cursor pagination. It intentionally excludes OAuth flows, request signing such as HMAC, non-JSON responses, multipart or streaming bodies, and user-supplied request/response transformation scripts.
+_Avoid_: Generic HTTP client, full Postman parity, scripted pre/post-processing
+
+**Research Source Panel**:
+The unified Anna App Shell surface that lists every Built-in Research Source and User-Configured Research Source together so the user manages all retrieval capabilities from one place. The panel marks each entry as built-in or user-added, lets the user edit credentials for both kinds, lets the user fully edit and remove only User-Configured entries, and merges its content from separate backend methods rather than exposing the backend split.
+_Avoid_: Settings page (too generic), data sources tab (loses the built-in/user distinction)
 
 **Core Research Actions**:
 The previous MVP action set for the Research Tool Dispatcher. For the refactored adapter, use App Tool Methods and avoid modeling frontend-owned research orchestration as backend actions.
 _Avoid_: app method set, backend route set, full job management API
 
 **Single-Page Research Workbench**:
-The MVP Anna App Shell experience: one page for entering a research query, optionally constraining domains, observing job progress, and reading the markdown report with source URLs. It excludes report-type switching, exports, follow-up chat, history, and multi-job management.
+The MVP Anna App Shell experience: one page for entering a research query, choosing which Research Sources to use, observing job progress, and reading the markdown report with source URLs. It excludes report-type switching, exports, follow-up chat, history, and multi-job management.
 _Avoid_: Original frontend parity, multi-report dashboard
 
 **Engineered Anna App Shell**:

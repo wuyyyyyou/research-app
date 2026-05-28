@@ -1,4 +1,16 @@
-import { TOOL_ID, type AnnaRuntimeApi, type ResearchJob, type ResearchResult, type ResultTransferDescriptor, type SearchResult, type StartResearchInput, type ToolSettings } from "../types";
+import {
+  TOOL_ID,
+  type AnnaRuntimeApi,
+  type IterationEntry,
+  type ResearchJob,
+  type ResearchResult,
+  type ResearchSourceView,
+  type ResultTransferDescriptor,
+  type SearchResult,
+  type SourceCallResult,
+  type StartResearchInput,
+  type ToolSettings,
+} from "../types";
 
 interface SettingsResponse {
   settings?: ToolSettings;
@@ -8,10 +20,16 @@ interface JobResponse {
   job?: ResearchJob | null;
 }
 
-interface SearchResponse extends JobResponse {
-  search_queries?: string[];
-  search_results?: SearchResult[];
-  source_urls?: string[];
+interface SourceListResponse {
+  sources?: ResearchSourceView[];
+}
+
+interface SourceResponse {
+  source?: ResearchSourceView;
+}
+
+interface CallSourceResponse extends JobResponse {
+  source_call?: SourceCallResult;
 }
 
 interface ContextResponse extends JobResponse {
@@ -31,14 +49,33 @@ interface TransferResponse {
 export interface ResearchApi {
   getSettings(): Promise<ToolSettings>;
   updateSettings(input: { tavily_api_key?: string; clear_tavily_api_key?: boolean }): Promise<ToolSettings>;
+  listResearchSources(): Promise<ResearchSourceView[]>;
+  updateResearchSourceCredential(input: { id: string; credential?: string; clear?: boolean }): Promise<ResearchSourceView>;
+  setResearchSourceEnabled(input: { id: string; enabled: boolean }): Promise<ResearchSourceView>;
+  upsertResearchSource(input: { definition: Record<string, unknown>; credential?: string }): Promise<ResearchSourceView>;
+  deleteResearchSource(input: { id: string }): Promise<{ id: string; deleted: boolean }>;
   createResearchJob(input: StartResearchInput): Promise<ResearchJob>;
   updateResearchJob(researchId: string, updates: Record<string, unknown>): Promise<ResearchJob>;
   getResearchJob(researchId?: string): Promise<ResearchJob | null>;
-  searchWeb(input: { research_id: string; search_queries: string[]; query_domains?: string[] }): Promise<SearchResponse>;
-  selectContext(input: { research_id: string }): Promise<ContextResponse>;
+  callResearchSource(input: {
+    research_id: string;
+    iteration: number;
+    source_id: string;
+    queries: string[];
+  }): Promise<CallSourceResponse>;
+  selectContext(input: {
+    research_id: string;
+    search_queries?: string[];
+    search_results?: SearchResult[];
+  }): Promise<ContextResponse>;
   saveResearchResult(input: { research_id: string }): Promise<ResultTransferDescriptor>;
-  uploadResearchResult(transfer: ResultTransferDescriptor, input: { report_markdown: string; source_urls?: string[] }): Promise<ResultResponse>;
-  complete(messages: AnnaRuntimeApi["llm"]["complete"] extends (request: infer Req) => unknown ? Req : never): ReturnType<AnnaRuntimeApi["llm"]["complete"]>;
+  uploadResearchResult(
+    transfer: ResultTransferDescriptor,
+    input: { report_markdown: string; source_urls?: string[] },
+  ): Promise<ResultResponse>;
+  complete(messages: AnnaRuntimeApi["llm"]["complete"] extends (request: infer Req) => unknown ? Req : never): ReturnType<
+    AnnaRuntimeApi["llm"]["complete"]
+  >;
 }
 
 export class AnnaResearchApi implements ResearchApi {
@@ -56,8 +93,36 @@ export class AnnaResearchApi implements ResearchApi {
     return response.settings;
   }
 
+  async listResearchSources(): Promise<ResearchSourceView[]> {
+    const response = (await this.call("app_list_research_sources", {})) as SourceListResponse;
+    return response.sources ?? [];
+  }
+
+  async updateResearchSourceCredential(input: { id: string; credential?: string; clear?: boolean }): Promise<ResearchSourceView> {
+    const response = (await this.call("app_update_research_source_credential", input)) as SourceResponse;
+    if (!response.source) throw new Error("Source update did not return the source view.");
+    return response.source;
+  }
+
+  async setResearchSourceEnabled(input: { id: string; enabled: boolean }): Promise<ResearchSourceView> {
+    const response = (await this.call("app_set_research_source_enabled", input)) as SourceResponse;
+    if (!response.source) throw new Error("Source enable did not return the source view.");
+    return response.source;
+  }
+
+  async upsertResearchSource(input: { definition: Record<string, unknown>; credential?: string }): Promise<ResearchSourceView> {
+    const response = (await this.call("app_upsert_research_source", input)) as SourceResponse;
+    if (!response.source) throw new Error("Source upsert did not return the source view.");
+    return response.source;
+  }
+
+  async deleteResearchSource(input: { id: string }): Promise<{ id: string; deleted: boolean }> {
+    const response = (await this.call("app_delete_research_source", input)) as { id?: string; deleted?: boolean };
+    return { id: response.id ?? input.id, deleted: Boolean(response.deleted) };
+  }
+
   async createResearchJob(input: StartResearchInput): Promise<ResearchJob> {
-    return requireJob(await this.call("app_create_research_job", { query: input.query, query_domains: input.query_domains }));
+    return requireJob(await this.call("app_create_research_job", { query: input.query }));
   }
 
   async updateResearchJob(researchId: string, updates: Record<string, unknown>): Promise<ResearchJob> {
@@ -69,11 +134,20 @@ export class AnnaResearchApi implements ResearchApi {
     return response.job ?? null;
   }
 
-  async searchWeb(input: { research_id: string; search_queries: string[]; query_domains?: string[] }): Promise<SearchResponse> {
-    return (await this.call("app_search_web", input)) as SearchResponse;
+  async callResearchSource(input: {
+    research_id: string;
+    iteration: number;
+    source_id: string;
+    queries: string[];
+  }): Promise<CallSourceResponse> {
+    return (await this.call("app_call_research_source", input)) as CallSourceResponse;
   }
 
-  async selectContext(input: { research_id: string }): Promise<ContextResponse> {
+  async selectContext(input: {
+    research_id: string;
+    search_queries?: string[];
+    search_results?: SearchResult[];
+  }): Promise<ContextResponse> {
     return (await this.call("app_select_context", input)) as ContextResponse;
   }
 
@@ -120,10 +194,15 @@ export function createStandaloneApi(): ResearchApi {
   return {
     getSettings: fail,
     updateSettings: fail,
+    listResearchSources: fail,
+    updateResearchSourceCredential: fail,
+    setResearchSourceEnabled: fail,
+    upsertResearchSource: fail,
+    deleteResearchSource: fail,
     createResearchJob: fail,
     updateResearchJob: fail,
     getResearchJob: fail,
-    searchWeb: fail,
+    callResearchSource: fail,
     selectContext: fail,
     saveResearchResult: fail,
     uploadResearchResult: fail,
@@ -136,3 +215,5 @@ function requireJob(response: unknown): ResearchJob {
   if (!job) throw new Error("Research response did not include a job.");
   return job;
 }
+
+export type { IterationEntry };

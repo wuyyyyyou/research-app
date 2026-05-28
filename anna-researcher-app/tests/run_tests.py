@@ -44,11 +44,12 @@ def test_settings(tmp_path: Path):
 
 def test_job_shell(tmp_path: Path):
     dispatcher = make_dispatcher(tmp_path)
-    created = dispatcher.dispatch("app_create_research_job", {"query": "Anna App", "query_domains": "HTTPS://Example.com/, docs.example.com"})
+    created = dispatcher.dispatch("app_create_research_job", {"query": "Anna App"})
     job = created["job"]
     assert_true(job["research_id"].startswith("research_"), "job should have id")
     loaded = dispatcher.dispatch("app_get_research_job", {})["job"]
     assert_true(loaded["research_id"] == job["research_id"], "latest job should load")
+    assert_true(loaded["schema_version"] == 2, "loaded job should advertise v2")
     updated = dispatcher.dispatch("app_update_research_job", {"research_id": job["research_id"], "updates": {"stage": "plan_queries", "progress": 25}})
     assert_true(updated["job"]["stage"] == "plan_queries", "metadata should update")
     try:
@@ -65,17 +66,20 @@ def test_job_shell(tmp_path: Path):
         pass
 
 
-def test_search_context_result(tmp_path: Path):
+def test_call_research_source_context_result(tmp_path: Path):
     os.environ["ANNA_RESEARCHER_FAKE_TAVILY"] = "1"
     dispatcher = make_dispatcher(tmp_path)
-    dispatcher.dispatch("app_update_settings", {"tavily_api_key": "tvly-test-secret"})
-    job = dispatcher.dispatch("app_create_research_job", {"query": "anna researcher", "query_domains": ["example.com"]})["job"]
+    job = dispatcher.dispatch("app_create_research_job", {"query": "anna researcher"})["job"]
     research_id = job["research_id"]
-    search = dispatcher.dispatch("app_search_web", {"research_id": research_id, "search_queries": ["anna researcher", "anna app research"], "query_domains": "example.com"})
-    assert_true(len(search["search_results"]) > 0, "search should return fake results")
-    assert_true(len(search["source_urls"]) == len(set(search["source_urls"])), "search urls should dedupe")
+    call = dispatcher.dispatch(
+        "app_call_research_source",
+        {"research_id": research_id, "iteration": 1, "source_id": "tavily", "queries": ["anna researcher", "anna app research"]},
+    )
+    assert_true(call["source_call"]["results_count"] > 0, "call should return synthetic results")
+    assert_true(all("items" not in c for c in call["source_call"]["calls"]), "items must be stripped from public payload")
     selected = dispatcher.dispatch("app_select_context", {"research_id": research_id})
     assert_true(bool(selected["selected_context"]), "context should be selected")
+    assert_true("[来源:" in selected["selected_context"], "context items must carry source prefix")
     transfer = dispatcher.dispatch("app_save_research_result", {"research_id": research_id})["transfer"]
     assert_true(transfer["method"] == "POST", "save should return transfer descriptor")
     saved = post_json(transfer["url"], {"report_markdown": "# Research Report\n\nDone", "source_urls": selected["source_urls"]})
@@ -84,8 +88,8 @@ def test_search_context_result(tmp_path: Path):
     loaded = dispatcher.dispatch("app_get_research_job", {"research_id": research_id})["job"]
     assert_true(loaded["result"]["report_markdown"].startswith("# Research Report"), "loaded job should include result")
     assert_true("search_results" not in loaded, "loaded job should be compact")
-    assert_true("selected_context" not in loaded, "loaded job should not include selected context")
-    assert_true("selected_sources" not in loaded, "loaded job should not include selected sources")
+    assert_true(loaded["iterations"], "loaded job should expose iterations")
+    assert_true(all("raw_results" not in it for it in loaded["iterations"]), "raw_results must never leave the backend")
 
 
 def test_result_transfer_http(tmp_path: Path):
@@ -106,14 +110,17 @@ def test_result_transfer_http(tmp_path: Path):
         assert_true(exc.code == 400, "blank report should return 400")
 
 
-def test_search_requires_settings(tmp_path: Path):
+def test_call_research_source_requires_credential(tmp_path: Path):
     old = os.environ.pop("ANNA_RESEARCHER_FAKE_TAVILY", None)
     try:
         dispatcher = make_dispatcher(tmp_path)
         job = dispatcher.dispatch("app_create_research_job", {"query": "anna"})["job"]
         try:
-            dispatcher.dispatch("app_search_web", {"research_id": job["research_id"], "search_queries": ["anna"]})
-            raise AssertionError("missing Tavily key should fail")
+            dispatcher.dispatch(
+                "app_call_research_source",
+                {"research_id": job["research_id"], "iteration": 1, "source_id": "tavily", "queries": ["anna"]},
+            )
+            raise AssertionError("missing Tavily credential should fail")
         except ConfigurationError:
             pass
     finally:
@@ -127,13 +134,14 @@ def test_selector():
         query="anna app research",
         search_queries=["anna app research"],
         search_results=[
-            {"query": "anna", "url": "https://example.com/a", "title": "Anna research", "content": "Anna app research context"},
-            {"query": "anna", "url": "https://example.com/a", "title": "Duplicate", "content": "duplicate"},
-            {"query": "anna", "url": "https://example.com/b", "title": "Same domain", "content": "anna app same domain"},
-            {"query": "anna", "url": "https://docs.example.org/c", "title": "Context selector", "content": "research context selector evidence"},
+            {"query": "anna", "source_id": "tavily", "source_name": "Tavily", "url": "https://example.com/a", "title": "Anna research", "content": "Anna app research context"},
+            {"query": "anna", "source_id": "tavily", "source_name": "Tavily", "url": "https://example.com/a", "title": "Duplicate", "content": "duplicate"},
+            {"query": "anna", "source_id": "tavily", "source_name": "Tavily", "url": "https://example.com/b", "title": "Same domain", "content": "anna app same domain"},
+            {"query": "anna", "source_id": "tavily", "source_name": "Tavily", "url": "https://docs.example.org/c", "title": "Context selector", "content": "research context selector evidence"},
         ],
     )
     assert_true(selected["source_urls"] == ["https://example.com/a", "https://docs.example.org/c"], "selector should dedupe and limit domains")
+    assert_true("[来源: Tavily]" in selected["selected_context"], "selector should emit source prefix")
 
 
 class PluginProcess:
@@ -185,6 +193,9 @@ def test_plugin_contract(tmp_path: Path):
         assert_true(describe["result"]["name"] == "tool-test-researcher-12345678", "describe should advertise tool")
         assert_true(describe["result"]["version"] == "0.2.0", "describe should advertise breaking version")
         assert_true("research" not in tools, "legacy research method should be absent")
+        assert_true("app_search_web" not in tools, "legacy app_search_web must be removed")
+        assert_true("app_call_research_source" in tools, "new app_call_research_source must be advertised")
+        assert_true("app_list_research_sources" in tools, "new app_list_research_sources must be advertised")
         assert_true(all(name.startswith("app_") for name in tools), "all methods should be app methods")
         health = plugin.call("health")
         assert_true(health["result"]["status"] == "healthy", "health should pass")
@@ -209,15 +220,17 @@ def test_bundle_contract():
     assert_true('"llm":["complete"]' in manifest.replace(" ", ""), "manifest should authorize llm.complete")
     assert_true('method:"research"' not in bundle_js and 'method: "research"' not in bundle_js, "bundle should not call legacy research method")
     assert_true('"action":"advance"' not in bundle_js and 'action:"advance"' not in bundle_js, "bundle should not contain legacy advance action")
+    assert_true("app_search_web" not in bundle_js, "bundle should not reference legacy app_search_web")
+    assert_true("query_domains" not in bundle_js, "bundle should not reference query_domains")
 
 
 def main():
     tests = [
         ("settings", test_settings),
         ("job_shell", test_job_shell),
-        ("search_context_result", test_search_context_result),
+        ("call_research_source", test_call_research_source_context_result),
         ("result_transfer_http", test_result_transfer_http),
-        ("search_requires_settings", test_search_requires_settings),
+        ("call_requires_credential", test_call_research_source_requires_credential),
         ("selector", lambda tmp: test_selector()),
         ("plugin_contract", test_plugin_contract),
         ("bundle_contract", lambda tmp: test_bundle_contract()),

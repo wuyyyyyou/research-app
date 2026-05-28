@@ -6,6 +6,7 @@ export type ResearchStage =
   | "idle"
   | "select_role"
   | "plan_queries"
+  | "decide_next_action"
   | "search_next_query"
   | "select_context"
   | "write_report"
@@ -25,6 +26,59 @@ export interface SearchResult {
   title?: string;
   content?: string;
   score?: number;
+  source_id?: string;
+  source_name?: string;
+}
+
+export type ResearchSourceErrorCode =
+  | "auth_failed"
+  | "rate_limited"
+  | "upstream_5xx"
+  | "timeout"
+  | "bad_definition"
+  | "empty_result";
+
+export interface ResearchSourceView {
+  id: string;
+  name: string;
+  kind: "builtin" | "user" | string;
+  description?: string;
+  enabled: boolean;
+  max_parallel: number;
+  credential_status: "missing" | "configured" | string;
+  credential_masked?: string;
+  definition?: Record<string, unknown>;
+}
+
+export interface SourceCallSummary {
+  source_id: string;
+  source_name: string;
+  query: string;
+  results_count: number;
+  top_titles: string[];
+  duration_ms: number;
+  error: ResearchSourceErrorCode | null;
+}
+
+export interface SourceCallResult {
+  source_id: string;
+  source_name: string;
+  queries: string[];
+  results_count: number;
+  top_titles: string[];
+  duration_ms: number;
+  error: ResearchSourceErrorCode | null;
+  calls: SourceCallSummary[];
+}
+
+export interface IterationEntry {
+  iteration: number;
+  source_id: string;
+  source_name: string;
+  queries: string[];
+  results_count: number;
+  source_calls: SourceCallSummary[];
+  appended_at?: string;
 }
 
 export interface ResearchJob {
@@ -33,7 +87,6 @@ export interface ResearchJob {
   stage?: ResearchStage;
   progress?: number;
   query?: string;
-  query_domains?: string[];
   agent_name?: string;
   agent_role_prompt?: string;
   search_queries?: string[];
@@ -46,6 +99,21 @@ export interface ResearchJob {
   search_total?: number;
   result?: ResearchResult | null;
   error?: ResearchError | null;
+  iterations?: IterationEntry[];
+  research_log?: Array<{
+    iteration: number;
+    source_id: string;
+    source_name: string;
+    query: string;
+    results_count: number;
+    top_titles: string[];
+    duration_ms: number;
+    error: ResearchSourceErrorCode | null;
+  }>;
+  iteration?: number;
+  max_iterations?: number;
+  enabled_sources?: string[];
+  schema_version?: number;
 }
 
 export interface ResearchResult {
@@ -67,7 +135,6 @@ export interface ResultTransferDescriptor {
 
 export interface StartResearchInput {
   query: string;
-  query_domains: string[];
 }
 
 export interface ToolSettings {

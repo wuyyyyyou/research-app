@@ -16,12 +16,17 @@ const errorCodeKeys: Record<string, MessageKey> = {
   tavily_missing_credential: "errorMissingTavily",
   sampling_error: "errorSamplingFailed",
   sampling_failed: "errorSamplingFailed",
-  timeout: "errorSamplingFailed",
   retrieval_failed: "errorRetrievalFailed",
   retrieval_error: "errorRetrievalFailed",
   tool_failed: "errorToolFailed",
   not_ready: "errorNotReady",
   invalid_action: "errorInvalidAction",
+  auth_failed: "sourceErrorAuthFailed",
+  rate_limited: "sourceErrorRateLimited",
+  upstream_5xx: "sourceErrorUpstream5xx",
+  timeout: "sourceErrorTimeout",
+  bad_definition: "sourceErrorBadDefinition",
+  empty_result: "sourceErrorEmptyResult",
 };
 
 export function localizedStatusLabel(status: string | undefined, t: Translator): string {
@@ -35,6 +40,12 @@ export function localizedStageMessage(job: ResearchJob, t: Translator): string {
   if (stage === "idle") return t("stageIdle");
   if (stage === "select_role") return t("stageSelectRole");
   if (stage === "plan_queries") return t("stagePlanQueries");
+  if (stage === "decide_next_action") {
+    return t("stageDecideNextAction", {
+      current: job.iteration ?? 0,
+      total: job.max_iterations ?? "?",
+    });
+  }
   if (stage === "search_next_query") {
     return t("stageSearchNextQuery", {
       current: job.search_index ?? 0,

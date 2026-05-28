@@ -1,7 +1,12 @@
 import type { MessageKey } from "../i18n/messages";
 import { localizedJobMessage, localizedSourceCount, localizedStageMessage, localizedStatusLabel } from "../i18n/status";
 import type { ResearchJob } from "../types";
-import { clampProgress } from "../utils/domains";
+
+function clampProgress(value: number | undefined): number {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
 
 interface Props {
   job: ResearchJob | null;

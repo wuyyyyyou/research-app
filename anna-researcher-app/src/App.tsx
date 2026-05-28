@@ -3,7 +3,8 @@ import { AnnaResearchApi, createStandaloneApi, type ResearchApi } from "./api/re
 import { LanguageToggle } from "./components/LanguageToggle";
 import { ReportView } from "./components/ReportView";
 import { ResearchForm } from "./components/ResearchForm";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { ResearchSourcePanel } from "./components/ResearchSourcePanel";
+import { ResearchTimeline } from "./components/ResearchTimeline";
 import { StatusPanel } from "./components/StatusPanel";
 import { useResearchJob } from "./hooks/useResearchJob";
 import { useLocale } from "./i18n/useLocale";
@@ -21,6 +22,7 @@ export function App() {
   const [api, setApi] = useState<ResearchApi>(() => createStandaloneApi());
   const [connection, setConnection] = useState<ConnectionState>("standalone");
   const [validationMessage, setValidationMessage] = useState("");
+  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,20 +56,31 @@ export function App() {
 
   const connectionLabel = connection === "connected" ? t("connected") : t("standalone");
   const sourceResult = useMemo(() => research.result, [research.result]);
+  const ready = research.canStart;
 
-  function start(query: string, domains: string[]) {
+  function start(query: string) {
     setValidationMessage("");
-    void research.start(query, domains);
+    void research.start(query);
   }
 
-  function saveTavilyKey(key: string) {
+  async function saveCredential(input: { id: string; credential?: string; clear?: boolean }) {
     setValidationMessage("");
-    void research.updateSettings({ tavily_api_key: key });
+    await research.updateSourceCredential(input);
   }
 
-  function clearTavilyKey() {
+  async function toggleSourceEnabled(input: { id: string; enabled: boolean }) {
     setValidationMessage("");
-    void research.updateSettings({ clear_tavily_api_key: true });
+    await research.setSourceEnabled(input);
+  }
+
+  async function addSource(input: { definition: Record<string, unknown>; credential?: string }) {
+    setValidationMessage("");
+    await research.upsertSource(input);
+  }
+
+  async function deleteSource(input: { id: string }) {
+    setValidationMessage("");
+    await research.deleteSource(input);
   }
 
   return (
@@ -85,18 +98,41 @@ export function App() {
         </div>
       </header>
 
-      <SettingsPanel settings={research.settings} isBusy={research.isBusy} t={t} onSave={saveTavilyKey} onClear={clearTavilyKey} />
+      <section className="settings-band" aria-label={t("settingsAria")}>
+        <div className="settings-heading">
+          <div>
+            <h2>{t("settingsTitle")}</h2>
+            <p>{ready ? t("settingsConfigured") : t("settingsMissing")}</p>
+          </div>
+          <button type="button" onClick={() => setSourcePanelOpen(true)} data-testid="open-source-panel">
+            {t("manageSourcesButton")}
+          </button>
+        </div>
+      </section>
 
       <ResearchForm
         isBusy={research.isBusy}
-        canStart={research.canStart}
+        canStart={ready}
         t={t}
         onStart={start}
         onValidationError={setValidationMessage}
       />
 
       <StatusPanel job={research.job} message={message} isError={isMessageError} t={t} />
+      <ResearchTimeline iterations={research.job?.iterations} t={t} />
       <ReportView result={sourceResult} t={t} />
+
+      <ResearchSourcePanel
+        open={sourcePanelOpen}
+        sources={research.sources}
+        isBusy={research.isBusy}
+        t={t}
+        onClose={() => setSourcePanelOpen(false)}
+        onSaveCredential={saveCredential}
+        onToggleEnabled={toggleSourceEnabled}
+        onAddSource={addSource}
+        onDeleteSource={deleteSource}
+      />
     </main>
   );
 }
