@@ -13,6 +13,8 @@ def status_view(job: dict[str, Any]) -> dict[str, Any]:
         "report_type": "research_report",
         "source_count": len(job.get("source_urls") or []),
         "search_total": len(job.get("search_queries") or []),
+        "iteration": int(job.get("iteration") or 0),
+        "max_iterations": int(job.get("max_iterations") or 5),
         "error": job.get("error"),
         "created_at": job.get("created_at"),
         "updated_at": job.get("updated_at"),

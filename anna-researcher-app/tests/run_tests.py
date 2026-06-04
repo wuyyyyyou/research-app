@@ -50,8 +50,23 @@ def test_job_shell(tmp_path: Path):
     loaded = dispatcher.dispatch("app_get_research_job", {})["job"]
     assert_true(loaded["research_id"] == job["research_id"], "latest job should load")
     assert_true(loaded["schema_version"] == 2, "loaded job should advertise v2")
-    updated = dispatcher.dispatch("app_update_research_job", {"research_id": job["research_id"], "updates": {"stage": "plan_queries", "progress": 25}})
-    assert_true(updated["job"]["stage"] == "plan_queries", "metadata should update")
+    updated = dispatcher.dispatch(
+        "app_update_research_job",
+        {
+            "research_id": job["research_id"],
+            "updates": {
+                "stage": "search_next_query",
+                "progress": 25,
+                "iteration": 1,
+                "max_iterations": 5,
+                "enabled_sources": ["tavily"],
+            },
+        },
+    )
+    assert_true(updated["job"]["stage"] == "search_next_query", "metadata should update")
+    assert_true(updated["job"]["progress"] == 25, "progress should update")
+    assert_true(updated["job"]["iteration"] == 1, "iteration should update")
+    assert_true(updated["job"]["max_iterations"] == 5, "max_iterations should update")
     try:
         dispatcher.dispatch("app_update_research_job", {"research_id": job["research_id"], "updates": {"tavily_api_key": "leak"}})
         raise AssertionError("secret-like field should be rejected")

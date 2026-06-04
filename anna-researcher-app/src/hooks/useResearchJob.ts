@@ -214,8 +214,6 @@ export function useResearchJob(api: ResearchApi) {
           job = await updateJob(api, job, {
             stage: "search_next_query",
             iteration,
-            search_index: iteration,
-            search_total: MAX_RESEARCH_ITERATIONS,
             progress: progressForIteration(iteration) + 5,
           });
           setJob(job);

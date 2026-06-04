@@ -104,9 +104,21 @@ def test_job_create_update_latest_and_not_found(tmp_path):
     assert dispatcher.dispatch("app_get_research_job", {})["job"]["research_id"] == job["research_id"]
     updated = dispatcher.dispatch(
         "app_update_research_job",
-        {"research_id": job["research_id"], "updates": {"stage": "plan_queries", "progress": 25}},
+        {
+            "research_id": job["research_id"],
+            "updates": {
+                "stage": "search_next_query",
+                "progress": 25,
+                "iteration": 1,
+                "max_iterations": 5,
+                "enabled_sources": ["tavily"],
+            },
+        },
     )
-    assert updated["job"]["stage"] == "plan_queries"
+    assert updated["job"]["stage"] == "search_next_query"
+    assert updated["job"]["progress"] == 25
+    assert updated["job"]["iteration"] == 1
+    assert updated["job"]["max_iterations"] == 5
     with pytest.raises(ValidationError):
         dispatcher.dispatch(
             "app_update_research_job",

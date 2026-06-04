@@ -212,6 +212,8 @@ describe("useResearchJob (iterative loop)", () => {
     expect(decisionMessages).toContain("finish");
     expect(decisionMessages).toContain("Iteration: 1/5");
     expect(JSON.stringify(calls)).not.toContain("query_domains");
+    expect(JSON.stringify(calls)).not.toContain("search_index");
+    expect(JSON.stringify(calls)).not.toContain("search_total");
     expect(JSON.stringify(calls.find((call) => Array.isArray(call) && call[0] === "saveResearchResult"))).not.toContain(
       "report_markdown",
     );

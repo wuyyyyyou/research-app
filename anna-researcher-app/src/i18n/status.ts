@@ -48,8 +48,8 @@ export function localizedStageMessage(job: ResearchJob, t: Translator): string {
   }
   if (stage === "search_next_query") {
     return t("stageSearchNextQuery", {
-      current: job.search_index ?? 0,
-      total: job.search_total ?? "?",
+      current: job.iteration ?? 0,
+      total: job.max_iterations ?? "?",
     });
   }
   if (stage === "select_context") return t("stageSelectContext");

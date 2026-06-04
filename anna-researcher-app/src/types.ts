@@ -123,7 +123,6 @@ export interface ResearchJob {
   selected_sources?: SearchResult[];
   source_urls?: string[];
   source_count?: number;
-  search_index?: number;
   search_total?: number;
   result?: ResearchResult | null;
   error?: ResearchError | null;
