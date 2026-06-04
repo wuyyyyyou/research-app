@@ -47,3 +47,4 @@ executa-msg-*.json
 *.tmp
 
 **/.cache
+anna-researcher-app/bundle/
