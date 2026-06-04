@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { connectAnnaRuntime } from "./api/annaRuntime";
 import { AnnaResearchApi, createStandaloneApi, type ResearchApi } from "./api/researchApi";
 import { LanguageToggle } from "./components/LanguageToggle";
 import { ReportView } from "./components/ReportView";
@@ -13,17 +14,11 @@ import { StatusPanel } from "./components/StatusPanel";
 import { MAX_RESEARCH_ITERATIONS, useResearchJob } from "./hooks/useResearchJob";
 import { useLocale } from "./i18n/useLocale";
 import { localizedError, localizedJobMessage } from "./i18n/status";
-import type { AnnaRuntimeGlobal } from "./types";
-
-declare global {
-  interface Window {
-    AnnaAppRuntime?: AnnaRuntimeGlobal;
-  }
-}
 
 export function App() {
   const { locale, setLocale, t } = useLocale();
   const [api, setApi] = useState<ResearchApi>(() => createStandaloneApi());
+  const [runtimeError, setRuntimeError] = useState<unknown>(null);
   const [validationMessage, setValidationMessage] = useState("");
   const [appPage, setAppPage] = useState<"intro" | "result" | "sources" | "source-detail" | "source-new">("intro");
   const [sourceReturnPage, setSourceReturnPage] = useState<"intro" | "result">("intro");
@@ -35,14 +30,15 @@ export function App() {
     let cancelled = false;
     async function connect() {
       try {
-        if (!window.AnnaAppRuntime) throw new Error("AnnaAppRuntime SDK not loaded");
-        const anna = await window.AnnaAppRuntime.connect();
+        const anna = await connectAnnaRuntime();
         if (!cancelled) {
+          setRuntimeError(null);
           setApi(new AnnaResearchApi(anna));
         }
       } catch (err) {
         console.warn("[anna-researcher] standalone mode:", err instanceof Error ? err.message : err);
         if (!cancelled) {
+          setRuntimeError(err);
           setApi(createStandaloneApi());
         }
       }
@@ -56,8 +52,9 @@ export function App() {
   const research = useResearchJob(api);
   const jobMessage = localizedJobMessage(research.job, t);
   const asyncErrorMessage = research.error ? localizedError(research.error, t) : "";
-  const message = validationMessage || asyncErrorMessage || jobMessage.message;
-  const isMessageError = Boolean(validationMessage || asyncErrorMessage || jobMessage.isError);
+  const runtimeErrorMessage = runtimeError ? t("runtimeMissing") : "";
+  const message = validationMessage || runtimeErrorMessage || asyncErrorMessage || jobMessage.message;
+  const isMessageError = Boolean(validationMessage || runtimeErrorMessage || asyncErrorMessage || jobMessage.isError);
 
   const sourceResult = useMemo(() => research.result, [research.result]);
   const selectedSource = useMemo(
@@ -167,6 +164,7 @@ export function App() {
             <ResearchSourceListPage
               sources={research.sources}
               isBusy={research.isBusy}
+              errorMessage={runtimeErrorMessage || asyncErrorMessage}
               t={t}
               onBack={returnFromSources}
               onAdd={showNewSource}

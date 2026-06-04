@@ -9,6 +9,7 @@ interface SharedProps {
 
 interface ListProps extends SharedProps {
   sources: ResearchSourceView[];
+  errorMessage?: string;
   onBack(): void;
   onAdd(): void;
   onOpenSource(id: string): void;
@@ -31,7 +32,7 @@ interface NewProps extends SharedProps {
 
 type Feedback = { kind: "ok" | "error"; text: string } | null;
 
-export function ResearchSourceListPage({ sources, isBusy, t, onBack, onAdd, onOpenSource }: ListProps) {
+export function ResearchSourceListPage({ sources, isBusy, errorMessage, t, onBack, onAdd, onOpenSource }: ListProps) {
   return (
     <section className="page active source-page" aria-label={t("sourcePanelTitle")}>
       <div className="source-page-head">
@@ -45,6 +46,11 @@ export function ResearchSourceListPage({ sources, isBusy, t, onBack, onAdd, onOp
           {t("addSourceButton")}
         </button>
       </div>
+      {errorMessage ? (
+        <p className="feedback-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
 
       <ul className="source-list page-source-list">
         {sources.length === 0 ? <li className="source-empty">{t("sourceListEmpty")}</li> : null}

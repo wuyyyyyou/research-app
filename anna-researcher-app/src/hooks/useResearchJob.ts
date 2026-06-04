@@ -54,6 +54,7 @@ export function useResearchJob(api: ResearchApi) {
       try {
         const [nextSettings, nextSources] = await Promise.all([api.getSettings(), api.listResearchSources()]);
         if (cancelled) return;
+        setError(null);
         setSettings(nextSettings);
         setSources(nextSources);
         const latest = await api.getResearchJob();

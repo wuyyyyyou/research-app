@@ -45,3 +45,5 @@ pnpm-debug.log*
 executa-resp-*.json
 executa-msg-*.json
 *.tmp
+
+**/.cache
