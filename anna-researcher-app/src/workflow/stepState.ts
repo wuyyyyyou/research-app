@@ -40,10 +40,10 @@ export interface StepProjection {
 
 export function projectGuidedStep(input: StepProjectionInput): StepProjection {
   const phaseStep = stepForPhase(input.phase, input.job, input.result);
-  const locked = input.phase === "running" || phaseStep === "generate";
+  const locked = isLockedPhase(input.phase) || phaseStep === "generate";
   const completed = completedFor(input, phaseStep);
   const available = availableFor(input, phaseStep, locked);
-  const terminal = phaseStep === "generate" || phaseStep === "report";
+  const terminal = phaseStep === "generate" || isTerminalReport(input);
   const requested = !terminal && input.requestedStep && available.includes(input.requestedStep) ? input.requestedStep : undefined;
   const current = requested ?? phaseStep;
   return {
@@ -59,13 +59,21 @@ export function stepIndex(step: GuidedStepId): number {
   return guidedSteps.findIndex((item) => item.id === step);
 }
 
+function isTerminalReport(input: StepProjectionInput): boolean {
+  return input.phase === "completed" || input.job?.status === "completed";
+}
+
 function stepForPhase(phase: string, job?: ResearchJob | null, result?: ResearchResult | null): GuidedStepId {
   if (phase === "completed" || job?.status === "completed" || result?.report_markdown) return "report";
   if (phase === "running" || phase === "loading_result") return "generate";
-  if (phase === "outline_review") return "outline";
-  if (phase === "focus_review") return "focus";
-  if (phase === "role_review" || phase === "starting") return "role";
+  if (phase === "outline_review" || phase === "generating_outline") return "outline";
+  if (phase === "focus_review" || phase === "generating_focuses") return "focus";
+  if (phase === "role_review" || phase === "starting" || phase === "generating_roles") return "role";
   return "need";
+}
+
+function isLockedPhase(phase: string): boolean {
+  return phase === "running" || phase === "generating_roles" || phase === "generating_focuses" || phase === "generating_outline";
 }
 
 function completedFor(input: StepProjectionInput, phaseStep: GuidedStepId): GuidedStepId[] {
@@ -80,10 +88,11 @@ function completedFor(input: StepProjectionInput, phaseStep: GuidedStepId): Guid
 
 function availableFor(input: StepProjectionInput, phaseStep: GuidedStepId, locked: boolean): GuidedStepId[] {
   if (phaseStep === "report") return ["report"];
-  if (locked) return ["generate"];
+  if (locked) return [phaseStep];
   const available: GuidedStepId[] = ["need"];
   if (input.phase === "role_review" || input.job?.research_id) available.push("role");
   if (input.phase === "focus_review" || input.job?.confirmed_role) available.push("focus");
   if (input.phase === "outline_review" || (input.job?.confirmed_focuses || []).length) available.push("outline");
+  if (input.job?.status === "completed" && (input.result || input.job.result)) available.push("report");
   return guidedSteps.map((step) => step.id).filter((id) => available.includes(id));
 }

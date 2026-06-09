@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { formatResearchQuery, hasCompletedResearchResult, makeIntroStepLabel, makeStepLabel } from "../../src/App";
 import { useState } from "react";
+import { DraftGenerationPage } from "../../src/components/DraftGenerationPage";
+import { FocusReviewPage } from "../../src/components/FocusReviewPage";
+import { RegenerationControl } from "../../src/components/RegenerationControl";
 import { ReportView } from "../../src/components/ReportView";
 import { ResearchForm } from "../../src/components/ResearchForm";
 import {
@@ -13,6 +16,7 @@ import { ResearchTimeline } from "../../src/components/ResearchTimeline";
 import { createTranslator, localeStorageKey } from "../../src/i18n/messages";
 import { useLocale } from "../../src/i18n/useLocale";
 import type { ResearchSourceView } from "../../src/types";
+import { summarizePlan } from "../../src/workflow/planSummary";
 
 function LocaleProbe() {
   const { locale, setLocale, t } = useLocale();
@@ -124,6 +128,77 @@ describe("ResearchForm", () => {
     expect((screen.getByRole("button", { name: "Start Research" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Configure at least one research source credential to begin.")).toBeTruthy();
     expect(screen.getByText("Enter a research need.")).toBeTruthy();
+  });
+});
+
+describe("FocusReviewPage", () => {
+  it("renders the continue action with the selected focus count", () => {
+    const t = createTranslator("en");
+    render(
+      <FocusReviewPage
+        candidates={[
+          { id: "focus-1", text: "Market risk", rationale: "Check demand." },
+          { id: "focus-2", text: "Product depth", rationale: "Check roadmap." },
+        ]}
+        selectedIds={["focus-1"]}
+        instruction=""
+        summary={summarizePlan({
+          role: { server: "Analyst", agent_role_prompt: "Use sources." },
+          focuses: [],
+          sections: [],
+        })}
+        isBusy={false}
+        t={t}
+        onSelectedIdsChange={vi.fn()}
+        onCandidateChange={vi.fn()}
+        onInstructionChange={vi.fn()}
+        onRegenerate={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Confirm focuses and continue" })).toBeTruthy();
+  });
+});
+
+describe("Draft planning UI", () => {
+  it("renders an explicit loading page while waiting for a draft", () => {
+    const t = createTranslator("en");
+    render(
+      <DraftGenerationPage
+        stepLabel="Role"
+        title="Generating Research Roles"
+        message="Anna is generating comparable research roles from your need."
+        t={t}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Generating Research Roles" })).toBeTruthy();
+    expect(screen.getByLabelText("Generating draft")).toBeTruthy();
+  });
+
+  it("opens regeneration requirements in a dialog before replacing a draft", () => {
+    const t = createTranslator("en");
+    const onChange = vi.fn();
+    const onRegenerate = vi.fn();
+    render(
+      <RegenerationControl
+        label="Regenerate roles"
+        value=""
+        t={t}
+        onChange={onChange}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate roles" }));
+    expect(screen.getByRole("dialog", { name: "Regenerate roles" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Regeneration requirements"), { target: { value: "Make them more technical" } });
+    expect(onChange).toHaveBeenCalledWith("Make them more technical");
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 });
 

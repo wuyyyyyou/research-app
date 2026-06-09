@@ -45,6 +45,19 @@ describe("guided workflow projection", () => {
     expect(projected.current).toBe("report");
     expect(projected.availableSteps).toEqual(["report"]);
   });
+
+  it("allows opening the last completed report from a new idle draft", () => {
+    const projected = projectGuidedStep({
+      requestedStep: "report",
+      phase: "idle",
+      canStart: true,
+      job: { research_id: "done-1", status: "completed" },
+      result: { report_markdown: "# Done" },
+    });
+
+    expect(projected.current).toBe("report");
+    expect(projected.availableSteps).toContain("report");
+  });
 });
 
 describe("run event projection", () => {

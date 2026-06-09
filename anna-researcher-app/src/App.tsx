@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { connectAnnaRuntime } from "./api/annaRuntime";
 import { AnnaResearchApi, createStandaloneApi, type ResearchApi } from "./api/researchApi";
+import { DraftGenerationPage } from "./components/DraftGenerationPage";
 import { FocusReviewPage } from "./components/FocusReviewPage";
 import { LanguageToggle } from "./components/LanguageToggle";
 import { OutlineReviewPage } from "./components/OutlineReviewPage";
@@ -62,13 +63,17 @@ export function App() {
   }, []);
 
   const research = useResearchJob(api);
-  const sourceResult = useMemo(() => research.result, [research.result]);
-  const hasCompletedResult = hasCompletedResearchResult(research.job, sourceResult);
+  const sourceResult = useMemo(() => {
+    if (requestedStep === "report" && !research.result && research.lastCompletedResult) return research.lastCompletedResult;
+    return research.result;
+  }, [requestedStep, research.lastCompletedResult, research.result]);
+  const projectionJob = requestedStep === "report" && !research.job ? research.lastCompletedJob : research.job;
+  const hasCompletedResult = hasCompletedResearchResult(research.lastCompletedJob ?? research.job, research.lastCompletedResult ?? sourceResult);
   const projection = projectGuidedStep({
     requestedStep,
     phase: research.phase,
     canStart: research.canStart,
-    job: research.job,
+    job: projectionJob,
     result: sourceResult,
   });
   const step = projection.current;
@@ -90,11 +95,11 @@ export function App() {
   useEffect(() => {
     if (research.phase === "settings_required") {
       setRequestedStep("need");
-    } else if (research.phase === "role_review") {
+    } else if (research.phase === "role_review" || research.phase === "generating_roles") {
       setRequestedStep("role");
-    } else if (research.phase === "focus_review") {
+    } else if (research.phase === "focus_review" || research.phase === "generating_focuses") {
       setRequestedStep("focus");
-    } else if (research.phase === "outline_review") {
+    } else if (research.phase === "outline_review" || research.phase === "generating_outline") {
       setRequestedStep("outline");
     } else if (research.phase === "running") {
       setRequestedStep("generate");
@@ -287,7 +292,7 @@ export function App() {
               onAddSource={addSource}
             />
           ) : (
-            <>
+            <div className="workflow-pages">
               <WorkflowStepper
                 current={step}
                 completed={projection.completedSteps}
@@ -296,7 +301,28 @@ export function App() {
                 t={t}
                 onNavigate={setRequestedStep}
               />
-              {step === "need" ? (
+              {research.phase === "generating_roles" ? (
+                <DraftGenerationPage
+                  stepLabel={t("stepRole")}
+                  title={t("generatingRolesTitle")}
+                  message={t("generatingRolesMessage")}
+                  t={t}
+                />
+              ) : research.phase === "generating_focuses" ? (
+                <DraftGenerationPage
+                  stepLabel={t("stepFocus")}
+                  title={t("generatingFocusesTitle")}
+                  message={t("generatingFocusesMessage")}
+                  t={t}
+                />
+              ) : research.phase === "generating_outline" ? (
+                <DraftGenerationPage
+                  stepLabel={t("stepOutline")}
+                  title={t("generatingOutlineTitle")}
+                  message={t("generatingOutlineMessage")}
+                  t={t}
+                />
+              ) : step === "need" ? (
                 <ResearchForm
                   isBusy={research.isBusy}
                   canStart={research.canStart}
@@ -379,7 +405,7 @@ export function App() {
                   onNewResearch={showNewResearch}
                 />
               )}
-            </>
+            </div>
           )}
         </div>
       </section>

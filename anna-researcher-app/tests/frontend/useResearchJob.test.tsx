@@ -240,7 +240,15 @@ function makeApi(options: ApiOptions = {}) {
   return { api, calls, llmCalls };
 }
 
-const ROLE_REPLY = '{"roles":[{"server":"Researcher","agent_role_prompt":"Use sources.","rationale":"good"},{"server":"Analyst","agent_role_prompt":"Analyze sources."},{"server":"Expert","agent_role_prompt":"Expert sources."}]}';
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
+const ROLE_REPLY = '{"roles":[{"server":"Researcher","agent_role_prompt":"Use sources."},{"server":"Analyst","agent_role_prompt":"Analyze sources."},{"server":"Expert","agent_role_prompt":"Expert sources."}]}';
 const FOCUS_REPLY = '{"focuses":[{"text":"focus one"},{"text":"focus two"},{"text":"focus three"},{"text":"focus four"},{"text":"focus five"}]}';
 const OUTLINE_REPLY = '{"sections":[{"title":"Section One","outline":"Cover one.","max_iterations":2},{"title":"Section Two","outline":"Cover two.","max_iterations":1},{"title":"Section Three","outline":"Cover three.","max_iterations":1},{"title":"Section Four","outline":"Cover four.","max_iterations":1}]}';
 const ASSIGN_REPLY = '{"sections":[{"id":"section-1","allowed_source_ids":["tavily"]},{"id":"section-2","allowed_source_ids":["tavily"]},{"id":"section-3","allowed_source_ids":["tavily"]},{"id":"section-4","allowed_source_ids":["tavily"]}]}';
@@ -290,6 +298,62 @@ describe("useResearchJob (iterative loop)", () => {
     expect(result.current.roleCandidates[0]).toMatchObject({ server: "Researcher", agent_role_prompt: "Use sources." });
     expect(llmCalls).toHaveLength(1);
     expect(JSON.stringify(llmCalls[0])).toContain("roles");
+    expect(JSON.stringify(llmCalls[0])).toContain('"role":"system"');
+    expect(JSON.stringify(llmCalls[0])).toContain("<research role name>");
+    expect(JSON.stringify(llmCalls[0])).not.toContain('"rationale"');
+  });
+
+  it("exposes draft generation phases while waiting for LLM planning replies", async () => {
+    const roleReply = deferred<string>();
+    const focusReply = deferred<string>();
+    const outlineReply = deferred<string>();
+    const assignReply = deferred<string>();
+    const replies = [roleReply.promise, focusReply.promise, outlineReply.promise, assignReply.promise];
+    let replyIndex = 0;
+    const base = makeApi();
+    const api: ResearchApi = {
+      ...base.api,
+      async complete(request) {
+        expect(request).not.toHaveProperty("maxTokens");
+        return { content: { type: "text", text: await replies[replyIndex++] } };
+      },
+    };
+    const { result } = renderHook(() => useResearchJob(api));
+
+    await waitFor(() => expect(result.current.phase).toBe("idle"));
+    let startPromise!: Promise<void>;
+    act(() => {
+      startPromise = result.current.start("anna");
+    });
+    await waitFor(() => expect(result.current.phase).toBe("generating_roles"));
+    await act(async () => {
+      roleReply.resolve(ROLE_REPLY);
+      await startPromise;
+    });
+    expect(result.current.phase).toBe("role_review");
+
+    let focusPromise!: Promise<void>;
+    act(() => {
+      focusPromise = result.current.confirmRole(result.current.roleCandidates[0]);
+    });
+    await waitFor(() => expect(result.current.phase).toBe("generating_focuses"));
+    await act(async () => {
+      focusReply.resolve(FOCUS_REPLY);
+      await focusPromise;
+    });
+    expect(result.current.phase).toBe("focus_review");
+
+    let outlinePromise!: Promise<void>;
+    act(() => {
+      outlinePromise = result.current.confirmFocuses(["focus one"]);
+    });
+    await waitFor(() => expect(result.current.phase).toBe("generating_outline"));
+    await act(async () => {
+      outlineReply.resolve(OUTLINE_REPLY);
+      assignReply.resolve(ASSIGN_REPLY);
+      await outlinePromise;
+    });
+    expect(result.current.phase).toBe("outline_review");
   });
 
   it("resets a restored completed job when starting a new research draft", async () => {
@@ -316,6 +380,8 @@ describe("useResearchJob (iterative loop)", () => {
     expect(result.current.phase).toBe("idle");
     expect(result.current.job).toBeNull();
     expect(result.current.result).toBeNull();
+    expect(result.current.lastCompletedJob?.research_id).toBe("done-1");
+    expect(result.current.lastCompletedResult?.report_markdown).toBe("# Old report");
   });
 
   it("confirms role and focus candidates before outline generation", async () => {

@@ -48,6 +48,8 @@ type Decision = DecideCallSource | DecideFinish;
 export function useResearchJob(api: ResearchApi) {
   const [job, setJob] = useState<ResearchJob | null>(null);
   const [result, setResult] = useState<ResearchResult | null>(null);
+  const [lastCompletedJob, setLastCompletedJob] = useState<ResearchJob | null>(null);
+  const [lastCompletedResult, setLastCompletedResult] = useState<ResearchResult | null>(null);
   const [settings, setSettings] = useState<ToolSettings | null>(null);
   const [sources, setSources] = useState<ResearchSourceView[]>([]);
   const [phase, setPhase] = useState<ResearchPhase>("idle");
@@ -86,6 +88,10 @@ export function useResearchJob(api: ResearchApi) {
         setError(null);
         setJob(latest);
         setResult(latest?.result || null);
+        if (latest?.status === "completed" && latest.result) {
+          setLastCompletedJob(latest);
+          setLastCompletedResult(latest.result);
+        }
         const ready = hasConfiguredSource(nextSources);
         if (!ready) setPhase("settings_required");
         else if (latest?.status === "completed" && latest.result) setPhase("completed");
@@ -163,7 +169,7 @@ export function useResearchJob(api: ResearchApi) {
     async (query: string, regenerationInstruction = "") => {
       const runId = runIdRef.current + 1;
       runIdRef.current = runId;
-      setPhase("starting");
+      setPhase("generating_roles");
       setError(null);
       setResult(null);
       setFocusCandidates([]);
@@ -195,7 +201,7 @@ export function useResearchJob(api: ResearchApi) {
     async (instruction = "") => {
       const query = job?.query || "";
       if (!query) return;
-      setPhase("starting");
+      setPhase("generating_roles");
       try {
         setRoleCandidates(await generateRoleCandidates(api, query, instruction));
         setPhase("role_review");
@@ -210,6 +216,7 @@ export function useResearchJob(api: ResearchApi) {
   const confirmRole = useCallback(
     async (role: ConfirmedResearchRole) => {
       if (!job?.research_id) throw new Error("Research job is missing research_id.");
+      setPhase("generating_focuses");
       try {
         const saved = await api.saveConfirmedResearchRole(job.research_id, role);
         setJob({ ...job, ...saved, confirmed_role: role });
@@ -228,7 +235,7 @@ export function useResearchJob(api: ResearchApi) {
     async (instruction = "") => {
       const role = job?.confirmed_role;
       if (!job?.query || !role) return;
-      setPhase("starting");
+      setPhase("generating_focuses");
       try {
         setFocusCandidates(await generateFocusCandidates(api, job.query, role, instruction));
         setPhase("focus_review");
@@ -243,6 +250,7 @@ export function useResearchJob(api: ResearchApi) {
   const confirmFocuses = useCallback(
     async (focuses: string[]) => {
       if (!job?.research_id || !job.confirmed_role) throw new Error("Research job is not ready for focus confirmation.");
+      setPhase("generating_outline");
       try {
         const saved = await api.saveConfirmedResearchFocuses(job.research_id, focuses);
         setJob({ ...job, ...saved, confirmed_focuses: focuses });
@@ -261,7 +269,7 @@ export function useResearchJob(api: ResearchApi) {
   const regenerateOutline = useCallback(
     async (instruction = "") => {
       if (!job?.query || !job.confirmed_role || !job.confirmed_focuses?.length) return;
-      setPhase("starting");
+      setPhase("generating_outline");
       try {
         const outline = await generateOutlineDraft(api, job.query, job.confirmed_role, job.confirmed_focuses, instruction);
         setOutlineDraft(await assignAllowedSources(api, outline, readyEnabledSources(sources), instruction));
@@ -335,8 +343,11 @@ export function useResearchJob(api: ResearchApi) {
           count: sourceUrls.length,
         });
         currentJob = await api.saveAssembledResearchResult({ research_id: job.research_id, report_markdown: reportMarkdown, source_urls: sourceUrls });
+        const completedResult = currentJob.result || { research_id: job.research_id, report_markdown: reportMarkdown, source_urls: sourceUrls, status: "completed" };
         setJob(currentJob);
-        setResult(currentJob.result || { research_id: job.research_id, report_markdown: reportMarkdown, source_urls: sourceUrls, status: "completed" });
+        setResult(completedResult);
+        setLastCompletedJob(currentJob);
+        setLastCompletedResult(completedResult);
         setPhase("completed");
       } catch (err) {
         setError(err);
@@ -349,6 +360,8 @@ export function useResearchJob(api: ResearchApi) {
   return {
     job,
     result,
+    lastCompletedJob,
+    lastCompletedResult,
     settings,
     sources,
     phase,
@@ -361,7 +374,7 @@ export function useResearchJob(api: ResearchApi) {
     setRoleCandidates,
     setFocusCandidates,
     setOutlineDraft,
-    isBusy: phase === "starting" || phase === "running" || phase === "loading_result",
+    isBusy: phase === "starting" || phase === "generating_roles" || phase === "generating_focuses" || phase === "generating_outline" || phase === "running" || phase === "loading_result",
     canStart: hasConfiguredSource(sources),
     refreshSettings,
     refreshSources,
@@ -405,13 +418,23 @@ function progressForIteration(iteration: number, maxIterations: number): number 
 async function generateRoleCandidates(api: ResearchApi, query: string, instruction = ""): Promise<RoleCandidate[]> {
   const text = await completeText(api, [
     {
+      role: "system",
+      content: {
+        type: "text",
+        text:
+          "Generate research role candidates for Anna Researcher. Return strict JSON only with this schema: " +
+          '{"roles":[{"server":"<research role name>","agent_role_prompt":"<system prompt for this role>"}]}. ' +
+          "The server field is the user-visible research role name, not a backend server. " +
+          "Do not include rationale, markdown, prose, or extra keys.",
+      },
+    },
+    {
       role: "user",
       content: {
         type: "text",
         text:
-          "Generate exactly 3 possible research roles for this task. Return strict JSON only: " +
-          '{"roles":[{"server":"...","agent_role_prompt":"...","rationale":"..."}]}.\n' +
-          "Each agent_role_prompt must be specific and source-grounded.\n" +
+          "Generate exactly 3 possible research roles for this task. " +
+          "Each agent_role_prompt must be specific, source-grounded, and suitable as the later system prompt for focus planning and report writing.\n" +
           (instruction ? `Regeneration requirement: ${instruction}\n` : "") +
           `Task:\n${query}`,
       },

@@ -54,7 +54,7 @@ export function RoleReviewPage({
               <span className="select-dot" />
               <strong>{candidate.server}</strong>
             </button>
-            <p>{candidate.rationale || t("roleFallbackRationale")}</p>
+            <p>{candidate.agent_role_prompt}</p>
             <details className="edit-details">
               <summary>{t("editButton")}</summary>
               <label>
